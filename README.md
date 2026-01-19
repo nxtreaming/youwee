@@ -27,10 +27,7 @@
 - 🔒 **No External Dependencies** - yt-dlp bundled with the app
 
 ## 📸 Screenshots
-
-| Download Page | Settings Page |
-|---------------|---------------|
-| ![Download](docs/screenshots/download.png) | ![Settings](docs/screenshots/settings.png) |
+![Youwee](docs/screenshots/youwee.png)
 
 ## 🚀 Installation
 
