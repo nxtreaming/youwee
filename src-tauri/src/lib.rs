@@ -1,13 +1,257 @@
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+use rusqlite::{Connection, params};
+use chrono::Utc;
 
 static CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
+
+// Global database connection wrapped in Mutex for thread safety
+static DB_CONNECTION: std::sync::OnceLock<Mutex<Connection>> = std::sync::OnceLock::new();
+
+const MAX_LOG_ENTRIES: i64 = 1000;
+
+/// Log entry structure
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct LogEntry {
+    pub id: String,
+    pub timestamp: String,
+    pub log_type: String,  // "command" | "success" | "error" | "stderr" | "info"
+    pub message: String,
+    pub details: Option<String>,
+    pub url: Option<String>,
+}
+
+/// Initialize the SQLite database
+fn init_database(app: &AppHandle) -> Result<(), String> {
+    if DB_CONNECTION.get().is_some() {
+        return Ok(());
+    }
+    
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+    
+    std::fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+    
+    let db_path = app_data_dir.join("logs.db");
+    
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+    
+    // Create logs table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS logs (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            log_type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            details TEXT,
+            url TEXT,
+            created_at INTEGER NOT NULL
+        )",
+        [],
+    ).map_err(|e| format!("Failed to create logs table: {}", e))?;
+    
+    // Create indexes
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_logs_type ON logs(log_type)",
+        [],
+    ).ok();
+    
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_logs_created ON logs(created_at DESC)",
+        [],
+    ).ok();
+    
+    DB_CONNECTION.set(Mutex::new(conn))
+        .map_err(|_| "Database already initialized".to_string())?;
+    
+    Ok(())
+}
+
+/// Get database connection
+fn get_db() -> Result<std::sync::MutexGuard<'static, Connection>, String> {
+    DB_CONNECTION.get()
+        .ok_or_else(|| "Database not initialized".to_string())?
+        .lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))
+}
+
+/// Add a log entry to the database
+fn add_log_internal(
+    log_type: &str,
+    message: &str,
+    details: Option<&str>,
+    url: Option<&str>,
+) -> Result<LogEntry, String> {
+    let conn = get_db()?;
+    
+    let id = uuid::Uuid::new_v4().to_string();
+    let timestamp = Utc::now().to_rfc3339();
+    let created_at = Utc::now().timestamp();
+    
+    conn.execute(
+        "INSERT INTO logs (id, timestamp, log_type, message, details, url, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![id, timestamp, log_type, message, details, url, created_at],
+    ).map_err(|e| format!("Failed to insert log: {}", e))?;
+    
+    // Prune old entries if exceeding limit
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM logs",
+        [],
+        |row| row.get(0),
+    ).unwrap_or(0);
+    
+    if count > MAX_LOG_ENTRIES {
+        let to_delete = count - MAX_LOG_ENTRIES;
+        conn.execute(
+            "DELETE FROM logs WHERE id IN (
+                SELECT id FROM logs ORDER BY created_at ASC LIMIT ?1
+            )",
+            params![to_delete],
+        ).ok();
+    }
+    
+    Ok(LogEntry {
+        id,
+        timestamp,
+        log_type: log_type.to_string(),
+        message: message.to_string(),
+        details: details.map(|s| s.to_string()),
+        url: url.map(|s| s.to_string()),
+    })
+}
+
+/// Get logs from database with optional filters
+#[tauri::command]
+fn get_logs(
+    filter: Option<String>,
+    search: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<LogEntry>, String> {
+    let conn = get_db()?;
+    
+    let limit = limit.unwrap_or(100).min(1000);
+    
+    // Build query dynamically
+    let filter_active = filter.as_ref().map(|f| f != "all" && !f.is_empty()).unwrap_or(false);
+    let search_active = search.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    
+    let mut query = String::from(
+        "SELECT id, timestamp, log_type, message, details, url FROM logs WHERE 1=1"
+    );
+    
+    if filter_active {
+        query.push_str(" AND log_type = ?1");
+    }
+    
+    if search_active {
+        if filter_active {
+            query.push_str(" AND (message LIKE ?2 OR details LIKE ?2 OR url LIKE ?2)");
+        } else {
+            query.push_str(" AND (message LIKE ?1 OR details LIKE ?1 OR url LIKE ?1)");
+        }
+    }
+    
+    query.push_str(" ORDER BY created_at DESC LIMIT ?");
+    // Append correct limit param number
+    if filter_active && search_active {
+        query = query.replace("LIMIT ?", "LIMIT ?3");
+    } else if filter_active || search_active {
+        query = query.replace("LIMIT ?", "LIMIT ?2");
+    } else {
+        query = query.replace("LIMIT ?", "LIMIT ?1");
+    }
+    
+    let mut stmt = conn.prepare(&query)
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+    
+    // Helper to parse row into LogEntry
+    fn parse_row(row: &rusqlite::Row) -> rusqlite::Result<LogEntry> {
+        Ok(LogEntry {
+            id: row.get(0)?,
+            timestamp: row.get(1)?,
+            log_type: row.get(2)?,
+            message: row.get(3)?,
+            details: row.get(4)?,
+            url: row.get(5)?,
+        })
+    }
+    
+    let logs: Vec<LogEntry> = match (filter_active, search_active) {
+        (true, true) => {
+            let f = filter.as_ref().unwrap();
+            let s = format!("%{}%", search.as_ref().unwrap());
+            stmt.query_map(params![f, s, limit], parse_row)
+                .map_err(|e| format!("Query failed: {}", e))?
+                .filter_map(|r| r.ok())
+                .collect()
+        }
+        (true, false) => {
+            let f = filter.as_ref().unwrap();
+            stmt.query_map(params![f, limit], parse_row)
+                .map_err(|e| format!("Query failed: {}", e))?
+                .filter_map(|r| r.ok())
+                .collect()
+        }
+        (false, true) => {
+            let s = format!("%{}%", search.as_ref().unwrap());
+            stmt.query_map(params![s, limit], parse_row)
+                .map_err(|e| format!("Query failed: {}", e))?
+                .filter_map(|r| r.ok())
+                .collect()
+        }
+        (false, false) => {
+            stmt.query_map(params![limit], parse_row)
+                .map_err(|e| format!("Query failed: {}", e))?
+                .filter_map(|r| r.ok())
+                .collect()
+        }
+    };
+    
+    Ok(logs)
+}
+
+/// Add a log entry (exposed as Tauri command)
+#[tauri::command]
+fn add_log(
+    log_type: String,
+    message: String,
+    details: Option<String>,
+    url: Option<String>,
+) -> Result<LogEntry, String> {
+    add_log_internal(
+        &log_type,
+        &message,
+        details.as_deref(),
+        url.as_deref(),
+    )
+}
+
+/// Clear all logs
+#[tauri::command]
+fn clear_logs() -> Result<(), String> {
+    let conn = get_db()?;
+    conn.execute("DELETE FROM logs", [])
+        .map_err(|e| format!("Failed to clear logs: {}", e))?;
+    Ok(())
+}
+
+/// Export logs as JSON
+#[tauri::command]
+fn export_logs() -> Result<String, String> {
+    let logs = get_logs(None, None, Some(MAX_LOG_ENTRIES))?;
+    serde_json::to_string_pretty(&logs)
+        .map_err(|e| format!("Failed to serialize logs: {}", e))
+}
 
 #[derive(Clone, Serialize)]
 struct DownloadProgress {
@@ -470,6 +714,23 @@ fn build_format_string(quality: &str, format: &str, video_codec: &str) -> String
     }
 }
 
+/// Format file size in human readable format
+fn format_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+    
+    if bytes >= GB {
+        format!("{:.2} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.2} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.2} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
 fn parse_progress(line: &str) -> Option<(f64, String, String, Option<u32>, Option<u32>)> {
     let mut playlist_index: Option<u32> = None;
     let mut playlist_count: Option<u32> = None;
@@ -543,8 +804,12 @@ async fn download_video(
     subtitle_langs: String,
     subtitle_embed: bool,
     subtitle_format: String,
+    // Logging settings
+    log_stderr: Option<bool>,
 ) -> Result<(), String> {
     CANCEL_FLAG.store(false, Ordering::SeqCst);
+    
+    let should_log_stderr = log_stderr.unwrap_or(true);
     
     // Sanitize and validate output path to prevent path traversal
     let sanitized_path = sanitize_output_path(&output_path)?;
@@ -554,6 +819,7 @@ async fn download_video(
     
     let mut args = vec![
         "--newline".to_string(),
+        "--no-warnings".to_string(),
         "-f".to_string(),
         format_string,
         "-o".to_string(),
@@ -640,7 +906,11 @@ async fn download_video(
         // No re-encoding needed since we removed upscaling options
     }
     
-    args.push(url);
+    args.push(url.clone());
+    
+    // Log the command before execution
+    let command_str = format!("yt-dlp {}", args.join(" "));
+    add_log_internal("command", &command_str, None, Some(&url)).ok();
     
     // Try to use bundled sidecar first, fallback to system yt-dlp
     let sidecar_result = app.shell().sidecar("yt-dlp");
@@ -774,12 +1044,22 @@ async fn download_video(
                             app.emit("download-progress", progress).ok();
                         }
                     }
-                    CommandEvent::Stderr(_) => {}
+                    CommandEvent::Stderr(bytes) => {
+                        if should_log_stderr {
+                            let stderr_line = String::from_utf8_lossy(&bytes).trim().to_string();
+                            if !stderr_line.is_empty() {
+                                add_log_internal("stderr", &stderr_line, None, Some(&url)).ok();
+                            }
+                        }
+                    }
                     CommandEvent::Error(err) => {
-                        return Err(format!("Process error: {}", err));
+                        let error_msg = format!("Process error: {}", err);
+                        add_log_internal("error", &error_msg, None, Some(&url)).ok();
+                        return Err(error_msg);
                     }
                     CommandEvent::Terminated(status) => {
                         if CANCEL_FLAG.load(Ordering::SeqCst) {
+                            add_log_internal("info", "Download cancelled by user", None, Some(&url)).ok();
                             return Err("Download cancelled".to_string());
                         }
                         
@@ -806,6 +1086,19 @@ async fn download_video(
                                 }
                             });
                             
+                            // Log success
+                            let success_msg = format!(
+                                "Downloaded: {}",
+                                current_title.clone().unwrap_or_else(|| "Unknown".to_string())
+                            );
+                            let details = format!(
+                                "Size: {} · Quality: {} · Format: {}",
+                                reported_filesize.map(|s| format_size(s)).unwrap_or_else(|| "Unknown".to_string()),
+                                quality_display.clone().unwrap_or_else(|| quality.clone()),
+                                format.clone()
+                            );
+                            add_log_internal("success", &success_msg, Some(&details), Some(&url)).ok();
+                            
                             let progress = DownloadProgress {
                                 id: id.clone(),
                                 percent: 100.0,
@@ -822,7 +1115,9 @@ async fn download_video(
                             app.emit("download-progress", progress).ok();
                             return Ok(());
                         } else {
-                            return Err("Download failed".to_string());
+                            let error_msg = "Download failed";
+                            add_log_internal("error", error_msg, None, Some(&url)).ok();
+                            return Err(error_msg.to_string());
                         }
                     }
                     _ => {}
@@ -839,7 +1134,7 @@ async fn download_video(
                 .spawn()
                 .map_err(|e| format!("Failed to start yt-dlp: {}. Please install yt-dlp: brew install yt-dlp", e))?;
             
-            handle_tokio_download(app, id, process, quality.clone(), format.clone()).await
+            handle_tokio_download(app, id, process, quality.clone(), format.clone(), url.clone(), should_log_stderr).await
         }
     }
 }
@@ -850,8 +1145,11 @@ async fn handle_tokio_download(
     mut process: tokio::process::Child,
     quality: String,
     format: String,
+    url: String,
+    should_log_stderr: bool,
 ) -> Result<(), String> {
     let stdout = process.stdout.take().ok_or("Failed to get stdout")?;
+    let stderr = process.stderr.take();
     let mut reader = BufReader::new(stdout).lines();
     
     let mut current_title: Option<String> = None;
@@ -969,7 +1267,21 @@ async fn handle_tokio_download(
     
     let status = process.wait().await.map_err(|e| format!("Process error: {}", e))?;
     
+    // Process stderr if available and logging is enabled
+    if should_log_stderr {
+        if let Some(stderr_handle) = stderr {
+            let mut stderr_reader = BufReader::new(stderr_handle).lines();
+            while let Ok(Some(stderr_line)) = stderr_reader.next_line().await {
+                let trimmed = stderr_line.trim();
+                if !trimmed.is_empty() {
+                    add_log_internal("stderr", trimmed, None, Some(&url)).ok();
+                }
+            }
+        }
+    }
+    
     if CANCEL_FLAG.load(Ordering::SeqCst) {
+        add_log_internal("info", "Download cancelled by user", None, Some(&url)).ok();
         return Err("Download cancelled".to_string());
     }
     
@@ -995,6 +1307,19 @@ async fn handle_tokio_download(
             }
         });
         
+        // Log success
+        let success_msg = format!(
+            "Downloaded: {}",
+            current_title.clone().unwrap_or_else(|| "Unknown".to_string())
+        );
+        let details = format!(
+            "Size: {} · Quality: {} · Format: {}",
+            reported_filesize.map(|s| format_size(s)).unwrap_or_else(|| "Unknown".to_string()),
+            quality_display.clone().unwrap_or_else(|| quality.clone()),
+            format.clone()
+        );
+        add_log_internal("success", &success_msg, Some(&details), Some(&url)).ok();
+        
         let progress = DownloadProgress {
             id: id.clone(),
             percent: 100.0,
@@ -1011,7 +1336,9 @@ async fn handle_tokio_download(
         app.emit("download-progress", progress).ok();
         Ok(())
     } else {
-        Err("Download failed".to_string())
+        let error_msg = "Download failed";
+        add_log_internal("error", error_msg, None, Some(&url)).ok();
+        Err(error_msg.to_string())
     }
 }
 
@@ -1842,6 +2169,11 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // Initialize the logs database
+            if let Err(e) = init_database(&app.handle()) {
+                log::error!("Failed to initialize logs database: {}", e);
+            }
+            
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -1862,7 +2194,11 @@ pub fn run() {
             check_ffmpeg,
             download_ffmpeg,
             get_ffmpeg_path_for_ytdlp,
-            get_available_subtitles
+            get_available_subtitles,
+            get_logs,
+            add_log,
+            clear_logs,
+            export_logs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

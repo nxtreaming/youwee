@@ -427,6 +427,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
       try {
         // Each item is now a single video, so disable playlist mode
+        // Get logStderr setting from localStorage
+        const logStderr = localStorage.getItem('youwee_log_stderr') !== 'false';
+        
         await invoke('download_video', {
           id: item.id,
           url: item.url,
@@ -442,6 +445,8 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
           subtitleLangs: settings.subtitleLangs.join(','),
           subtitleEmbed: settings.subtitleEmbed,
           subtitleFormat: settings.subtitleFormat,
+          // Logging settings
+          logStderr,
         });
         
         setItems(items => items.map(i => 

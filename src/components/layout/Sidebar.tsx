@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { 
   Youtube,
   Globe,
+  ScrollText,
   Settings, 
   ChevronLeft, 
   ChevronRight,
@@ -12,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-export type Page = 'youtube' | 'universal' | 'settings';
+export type Page = 'youtube' | 'universal' | 'logs' | 'settings';
 
 interface SidebarProps {
   currentPage: Page;
@@ -35,6 +36,11 @@ const navItems: NavItem[] = [
     id: 'universal',
     label: 'Universal',
     icon: <Globe className="w-5 h-5" />,
+  },
+  {
+    id: 'logs',
+    label: 'Logs',
+    icon: <ScrollText className="w-5 h-5" />,
   },
   {
     id: 'settings',

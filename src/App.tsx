@@ -3,10 +3,11 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import { DependenciesProvider, useDependencies } from '@/contexts/DependenciesContext';
 import { DownloadProvider, useDownload } from '@/contexts/DownloadContext';
 import { UniversalProvider } from '@/contexts/UniversalContext';
+import { LogProvider } from '@/contexts/LogContext';
 import { UpdaterProvider, useUpdater } from '@/contexts/UpdaterContext';
 import { MainLayout } from '@/components/layout';
 import type { Page } from '@/components/layout';
-import { DownloadPage, UniversalPage, SettingsPage } from '@/pages';
+import { DownloadPage, UniversalPage, LogsPage, SettingsPage } from '@/pages';
 import { UpdateDialog } from '@/components/UpdateDialog';
 import { FFmpegDialog } from '@/components/FFmpegDialog';
 
@@ -43,6 +44,7 @@ function AppContent() {
       <MainLayout currentPage={currentPage} onPageChange={setCurrentPage}>
         {currentPage === 'youtube' && <DownloadPage />}
         {currentPage === 'universal' && <UniversalPage />}
+        {currentPage === 'logs' && <LogsPage />}
         {currentPage === 'settings' && <SettingsPage />}
       </MainLayout>
       
@@ -81,9 +83,11 @@ function App() {
       <DependenciesProvider>
         <DownloadProvider>
           <UniversalProvider>
-            <UpdaterWrapper>
-              <AppContent />
-            </UpdaterWrapper>
+            <LogProvider>
+              <UpdaterWrapper>
+                <AppContent />
+              </UpdaterWrapper>
+            </LogProvider>
           </UniversalProvider>
         </DownloadProvider>
       </DependenciesProvider>

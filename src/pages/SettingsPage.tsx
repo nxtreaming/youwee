@@ -15,9 +15,7 @@ import {
   RefreshCw,
   Download,
   CheckCircle2,
-  AlertCircle,
   Loader2,
-  Sparkles,
   Film,
   Palette,
   Bell,
@@ -27,7 +25,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 
 // Gradient backgrounds for theme preview
 const themeGradients: Record<ThemeName, string> = {

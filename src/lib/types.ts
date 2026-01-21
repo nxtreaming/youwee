@@ -128,3 +128,17 @@ export interface PlaylistVideoEntry {
   duration?: number;
   channel?: string;
 }
+
+// Log types
+export type LogType = 'command' | 'success' | 'error' | 'stderr' | 'info';
+
+export interface LogEntry {
+  id: string;
+  timestamp: string; // ISO 8601
+  log_type: LogType;
+  message: string;
+  details?: string;
+  url?: string;
+}
+
+export type LogFilter = 'all' | 'command' | 'success' | 'error' | 'stderr';

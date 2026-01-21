@@ -22,7 +22,6 @@ import {
 } from '@/components/ui/popover';
 import type { Quality, Format, AudioBitrate } from '@/lib/types';
 import type { UniversalSettings } from '@/contexts/UniversalContext';
-import { cn } from '@/lib/utils';
 
 function formatFileSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) {

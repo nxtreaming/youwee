@@ -268,6 +268,9 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
       ));
 
       try {
+        // Get logStderr setting from localStorage
+        const logStderr = localStorage.getItem('youwee_log_stderr') !== 'false';
+        
         await invoke('download_video', {
           id: item.id,
           url: item.url,
@@ -282,6 +285,8 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
           subtitleLangs: '',
           subtitleEmbed: false,
           subtitleFormat: 'srt',
+          // Logging settings
+          logStderr,
         });
         
         setItems(items => items.map(i => 
