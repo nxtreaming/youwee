@@ -558,6 +558,9 @@ async fn download_video(
         format_string,
         "-o".to_string(),
         output_template,
+        // Print final filepath after all post-processing (for accurate filesize)
+        "--print".to_string(),
+        "after_move:filepath".to_string(),
         // Clean up intermediate files after merging
         "--no-keep-video".to_string(),
         "--no-keep-fragments".to_string(),
@@ -654,6 +657,7 @@ async fn download_video(
             let mut total_count: Option<u32> = None;
             let mut total_filesize: u64 = 0; // Sum of all stream sizes
             let mut current_stream_size: Option<u64> = None; // Current stream being downloaded
+            let mut final_filepath: Option<String> = None; // Final output file path from --print after_move:filepath
             
             // Use quality setting as resolution display
             let quality_display = match quality.as_str() {
@@ -700,6 +704,24 @@ async fn download_video(
                                     current_title = Some(filename[..end].to_string());
                                 }
                             }
+                        }
+                        
+                        // Capture final filepath from --print after_move:filepath
+                        // This line appears as just a file path without any prefix
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() 
+                            && !trimmed.starts_with('[') 
+                            && !trimmed.starts_with("Deleting")
+                            && !trimmed.starts_with("WARNING")
+                            && !trimmed.starts_with("ERROR")
+                            && (trimmed.ends_with(".mp3") 
+                                || trimmed.ends_with(".m4a") 
+                                || trimmed.ends_with(".opus")
+                                || trimmed.ends_with(".mp4")
+                                || trimmed.ends_with(".mkv")
+                                || trimmed.ends_with(".webm"))
+                        {
+                            final_filepath = Some(trimmed.to_string());
                         }
                         
                         // Parse filesize from progress line: "[download] 100% of 50.5MiB"
@@ -762,10 +784,27 @@ async fn download_video(
                         }
                         
                         if status.code == Some(0) {
-                            // Add the last stream size to total
-                            if let Some(last_size) = current_stream_size {
-                                total_filesize += last_size;
-                            }
+                            // Try to get actual file size from the final output file
+                            // This is more accurate than stream sizes (especially for MP3 conversion)
+                            let actual_filesize = if let Some(ref filepath) = final_filepath {
+                                std::fs::metadata(filepath)
+                                    .ok()
+                                    .map(|m| m.len())
+                            } else {
+                                None
+                            };
+                            
+                            // Use actual file size if available, otherwise fall back to stream sizes
+                            let reported_filesize = actual_filesize.or_else(|| {
+                                // Add the last stream size to total
+                                if let Some(last_size) = current_stream_size {
+                                    Some(total_filesize + last_size)
+                                } else if total_filesize > 0 {
+                                    Some(total_filesize)
+                                } else {
+                                    None
+                                }
+                            });
                             
                             let progress = DownloadProgress {
                                 id: id.clone(),
@@ -776,7 +815,7 @@ async fn download_video(
                                 title: current_title.clone(),
                                 playlist_index: current_index,
                                 playlist_count: total_count,
-                                filesize: if total_filesize > 0 { Some(total_filesize) } else { None },
+                                filesize: reported_filesize,
                                 resolution: quality_display.clone(),
                                 format_ext: Some(format.clone()),
                             };
@@ -820,6 +859,7 @@ async fn handle_tokio_download(
     let mut total_count: Option<u32> = None;
     let mut total_filesize: u64 = 0;
     let mut current_stream_size: Option<u64> = None;
+    let mut final_filepath: Option<String> = None; // Final output file path
     
     // Use quality setting as resolution display
     let quality_display = match quality.as_str() {
@@ -861,6 +901,23 @@ async fn handle_tokio_download(
                     current_title = Some(filename[..end].to_string());
                 }
             }
+        }
+        
+        // Capture final filepath from --print after_move:filepath
+        let trimmed = line.trim();
+        if !trimmed.is_empty() 
+            && !trimmed.starts_with('[') 
+            && !trimmed.starts_with("Deleting")
+            && !trimmed.starts_with("WARNING")
+            && !trimmed.starts_with("ERROR")
+            && (trimmed.ends_with(".mp3") 
+                || trimmed.ends_with(".m4a") 
+                || trimmed.ends_with(".opus")
+                || trimmed.ends_with(".mp4")
+                || trimmed.ends_with(".mkv")
+                || trimmed.ends_with(".webm"))
+        {
+            final_filepath = Some(trimmed.to_string());
         }
         
         // Parse filesize from progress line
@@ -917,10 +974,26 @@ async fn handle_tokio_download(
     }
     
     if status.success() {
-        // Add the last stream size to total
-        if let Some(last_size) = current_stream_size {
-            total_filesize += last_size;
-        }
+        // Try to get actual file size from the final output file
+        let actual_filesize = if let Some(ref filepath) = final_filepath {
+            std::fs::metadata(filepath)
+                .ok()
+                .map(|m| m.len())
+        } else {
+            None
+        };
+        
+        // Use actual file size if available, otherwise fall back to stream sizes
+        let reported_filesize = actual_filesize.or_else(|| {
+            // Add the last stream size to total
+            if let Some(last_size) = current_stream_size {
+                Some(total_filesize + last_size)
+            } else if total_filesize > 0 {
+                Some(total_filesize)
+            } else {
+                None
+            }
+        });
         
         let progress = DownloadProgress {
             id: id.clone(),
@@ -931,7 +1004,7 @@ async fn handle_tokio_download(
             title: current_title,
             playlist_index: current_index,
             playlist_count: total_count,
-            filesize: if total_filesize > 0 { Some(total_filesize) } else { None },
+            filesize: reported_filesize,
             resolution: quality_display,
             format_ext: Some(format),
         };
