@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Check, Database, Film, Moon, Palette, Sun } from 'lucide-react';
+import { Check, Database, Film, Monitor, Moon, Palette, Sun } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Select,
@@ -8,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useHistory } from '@/contexts/HistoryContext';
 import { useProcessing } from '@/contexts/ProcessingContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -21,6 +23,8 @@ const SUPPORTED_LANGUAGES = [
   { code: 'vi', name: 'Tiếng Việt' },
   { code: 'zh-CN', name: '简体中文' },
 ];
+
+const isMacOS = navigator.platform.includes('Mac');
 
 // Gradient backgrounds for theme preview
 const themeGradients: Record<ThemeName, string> = {
@@ -42,6 +46,16 @@ export function GeneralSection({ highlightId }: GeneralSectionProps) {
   const { theme, setTheme, mode, setMode } = useTheme();
   const { maxEntries, setMaxEntries, totalCount } = useHistory();
   const { previewSizeThreshold, setPreviewSizeThreshold } = useProcessing();
+
+  const [hideDockOnClose, setHideDockOnClose] = useState(() => {
+    return localStorage.getItem('youwee_hide_dock_on_close') === 'true';
+  });
+
+  const handleToggleHideDock = useCallback((checked: boolean) => {
+    setHideDockOnClose(checked);
+    localStorage.setItem('youwee_hide_dock_on_close', String(checked));
+    invoke('set_hide_dock_on_close', { hide: checked }).catch(() => {});
+  }, []);
 
   const handleLanguageChange = (langCode: string) => {
     i18n.changeLanguage(langCode);
@@ -226,6 +240,28 @@ export function GeneralSection({ highlightId }: GeneralSectionProps) {
           </Select>
         </SettingsRow>
       </SettingsSection>
+
+      {/* System (macOS only) */}
+      {isMacOS && (
+        <>
+          <SettingsDivider />
+          <SettingsSection
+            title={t('system.title')}
+            description={t('system.titleDesc')}
+            icon={<Monitor className="w-5 h-5 text-white" />}
+            iconClassName="bg-gradient-to-br from-slate-500 to-gray-600 shadow-slate-500/20"
+          >
+            <SettingsRow
+              id="hide-dock"
+              label={t('system.hideDockOnClose')}
+              description={t('system.hideDockOnCloseDesc')}
+              highlight={highlightId === 'hide-dock'}
+            >
+              <Switch checked={hideDockOnClose} onCheckedChange={handleToggleHideDock} />
+            </SettingsRow>
+          </SettingsSection>
+        </>
+      )}
     </div>
   );
 }

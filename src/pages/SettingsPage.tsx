@@ -35,7 +35,6 @@ import {
   SettingsSection,
   type SettingsSectionId,
   SettingsSidebar,
-  SystemSection,
 } from '@/components/settings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -144,8 +143,6 @@ export function SettingsPage() {
               )}
 
               {activeSection === 'network' && <NetworkSection highlightId={highlightId} />}
-
-              {activeSection === 'system' && <SystemSection highlightId={highlightId} />}
 
               {activeSection === 'about' && (
                 <AboutSettingsContent
