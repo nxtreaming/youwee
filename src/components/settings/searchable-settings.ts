@@ -109,6 +109,13 @@ export const SEARCHABLE_SETTINGS: SearchableSetting[] = [
     section: 'download',
   },
   {
+    id: 'auto-retry-toggle',
+    labelKey: 'download.autoRetryEnable',
+    descriptionKey: 'download.autoRetryEnableDesc',
+    keywords: ['retry', 'auto retry', 'attempt', 'delay', 'network', 'live', 'recover'],
+    section: 'download',
+  },
+  {
     id: 'sponsorblock',
     labelKey: 'download.sponsorBlockToggle',
     descriptionKey: 'download.sponsorBlockToggleDesc',

@@ -1,4 +1,4 @@
-import { Film, Gauge, Radio, ShieldCheck } from 'lucide-react';
+import { Film, Gauge, Radio, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useDownload } from '@/contexts/DownloadContext';
+import { clampAutoRetryDelaySeconds, clampAutoRetryMaxAttempts } from '@/lib/download-retry';
 import {
   SPONSORBLOCK_CATEGORIES,
   type SponsorBlockAction,
@@ -31,6 +32,7 @@ export function DownloadSection({ highlightId }: DownloadSectionProps) {
     updateEmbedThumbnail,
     updateLiveFromStart,
     updateSpeedLimit,
+    updateAutoRetry,
     updateSponsorBlock,
     updateSponsorBlockMode,
     updateSponsorBlockCategory,
@@ -255,6 +257,80 @@ export function DownloadSection({ highlightId }: DownloadSectionProps) {
                 </Select>
               </div>
             )}
+          </div>
+        </SettingsRow>
+      </SettingsSection>
+
+      <SettingsDivider />
+
+      <SettingsSection
+        title={t('download.autoRetry')}
+        description={t('download.autoRetryDesc')}
+        icon={<RotateCcw className="w-5 h-5 text-white" />}
+        iconClassName="bg-gradient-to-br from-cyan-500 to-sky-600 shadow-cyan-500/20"
+      >
+        <SettingsRow
+          id="auto-retry-toggle"
+          label={t('download.autoRetryEnable')}
+          description={t('download.autoRetryEnableDesc')}
+          highlight={highlightId === 'auto-retry-toggle'}
+        >
+          <Switch
+            checked={settings.autoRetryEnabled}
+            onCheckedChange={(enabled) =>
+              updateAutoRetry(
+                enabled,
+                settings.autoRetryMaxAttempts,
+                settings.autoRetryDelaySeconds,
+              )
+            }
+          />
+        </SettingsRow>
+
+        <SettingsRow
+          id="auto-retry-values"
+          label={t('download.autoRetryConfig')}
+          description={t('download.autoRetryConfigDesc')}
+          highlight={highlightId === 'auto-retry-values'}
+        >
+          <div className="flex w-full flex-wrap items-center gap-2 md:justify-end">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">{t('download.retryAttempts')}</span>
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                disabled={!settings.autoRetryEnabled}
+                value={settings.autoRetryMaxAttempts}
+                onChange={(e) =>
+                  updateAutoRetry(
+                    settings.autoRetryEnabled,
+                    clampAutoRetryMaxAttempts(Number(e.target.value) || 1),
+                    settings.autoRetryDelaySeconds,
+                  )
+                }
+                className="h-9 w-20 text-center disabled:opacity-50"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">{t('download.retryDelay')}</span>
+              <Input
+                type="number"
+                min={1}
+                max={60}
+                disabled={!settings.autoRetryEnabled}
+                value={settings.autoRetryDelaySeconds}
+                onChange={(e) =>
+                  updateAutoRetry(
+                    settings.autoRetryEnabled,
+                    settings.autoRetryMaxAttempts,
+                    clampAutoRetryDelaySeconds(Number(e.target.value) || 1),
+                  )
+                }
+                className="h-9 w-20 text-center disabled:opacity-50"
+              />
+              <span className="text-xs text-muted-foreground">{t('download.secondsShort')}</span>
+            </div>
           </div>
         </SettingsRow>
       </SettingsSection>

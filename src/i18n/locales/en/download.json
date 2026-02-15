@@ -16,7 +16,16 @@
     "toAdd": "to add",
     "urlCount": "{{count}} URL",
     "urlCount_plural": "{{count}} URLs",
-    "dropHint": "Drop URLs or .txt file here"
+    "dropHint": "Drop URLs or .txt file here",
+    "guide": "Guide",
+    "guideTitle": "Download Guide",
+    "guideDesc": "Quick tips for high-quality downloads and merged audio/video output.",
+    "guideHighResTitle": "2K/4K/8K with H.264",
+    "guideHighResText": "Many sources only provide H.264 up to Full HD. For 2K/4K/8K, use Auto (or VP9/AV1 when available) to get higher resolution.",
+    "guideFfmpegTitle": "Video and audio downloaded separately",
+    "guideFfmpegText": "Install FFmpeg in Settings > Dependencies so Youwee can merge video and audio into one output file.",
+    "guideOpenSettings": "Open Settings",
+    "guideGotIt": "Got it"
   },
   "settings": {
     "video": "Video",
@@ -61,9 +70,16 @@
     "subtitlesNotAvailable": "Subtitles not available for audio",
     "videoQuality": "Video quality",
     "outputFormat": "Output format",
-    "totalFileSize": "Total file size"
+    "totalFileSize": "Total file size",
+    "autoRetry": "Auto Retry",
+    "retryAttempts": "Attempts",
+    "retryDelaySeconds": "Delay (s)"
   },
   "quality": {
+    "360": "Low 360p",
+    "480": "SD 480p",
+    "720": "HD 720p",
+    "1080": "Full HD 1080p",
     "best": "Best Available",
     "bestShort": "Best",
     "8k": "8K Ultra HD",
@@ -72,13 +88,9 @@
     "4kShort": "4K",
     "2k": "2K Quad HD",
     "2kShort": "2K",
-    "1080": "Full HD 1080p",
     "1080Short": "1080p",
-    "720": "HD 720p",
     "720Short": "720p",
-    "480": "SD 480p",
     "480Short": "480p",
-    "360": "Low 360p",
     "360Short": "360p"
   },
   "queue": {
@@ -103,7 +115,8 @@
       "downloading": "Downloading",
       "completed": "Completed",
       "failed": "Failed",
-      "failedHint": "View Logs page for details"
+      "failedHint": "View Logs page for details",
+      "retrying": "Retry {{current}}/{{total}} in {{seconds}}s"
     },
     "summarize": "Summarize",
     "fetchingTranscript": "Fetching transcript...",

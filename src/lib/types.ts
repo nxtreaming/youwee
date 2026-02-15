@@ -60,6 +60,9 @@ export interface ItemDownloadSettings {
   subtitleFormat: SubtitleFormat;
   timeRangeStart?: string;
   timeRangeEnd?: string;
+  autoRetryEnabled: boolean;
+  autoRetryMaxAttempts: number;
+  autoRetryDelaySeconds: number;
 }
 
 // Simplified settings snapshot for Universal page
@@ -70,6 +73,16 @@ export interface ItemUniversalSettings {
   audioBitrate: AudioBitrate;
   timeRangeStart?: string;
   timeRangeEnd?: string;
+  autoRetryEnabled: boolean;
+  autoRetryMaxAttempts: number;
+  autoRetryDelaySeconds: number;
+}
+
+export interface DownloadRetryState {
+  retryIndex: number;
+  maxRetries: number;
+  delaySeconds: number;
+  remainingSeconds: number;
 }
 
 export interface DownloadItem {
@@ -99,6 +112,8 @@ export interface DownloadItem {
   extractor?: string; // e.g. "youtube", "tiktok", "instagram"
   // Settings snapshot when item was added to queue
   settings?: ItemDownloadSettings | ItemUniversalSettings;
+  // Auto retry status while waiting between attempts
+  retryState?: DownloadRetryState;
 }
 
 export interface ExternalEnqueueResult {
@@ -139,6 +154,10 @@ export interface DownloadSettings {
   speedLimitEnabled: boolean; // true = limited, false = unlimited
   speedLimitValue: number; // e.g. 10
   speedLimitUnit: 'K' | 'M' | 'G'; // KB/s, MB/s, GB/s
+  // Auto retry settings
+  autoRetryEnabled: boolean; // Retry transient failures automatically
+  autoRetryMaxAttempts: number; // Number of retries after initial failure (1-10)
+  autoRetryDelaySeconds: number; // Delay between retries in seconds (1-60)
   // SponsorBlock settings
   sponsorBlock: boolean; // toggle on/off
   sponsorBlockMode: SponsorBlockMode; // 'remove' | 'mark' | 'custom'

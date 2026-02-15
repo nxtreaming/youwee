@@ -22,6 +22,16 @@ export interface SubtitleFile {
   assHeader?: string;
 }
 
+export interface AssStyleOptions {
+  fontName?: string;
+  fontSize?: number;
+}
+
+const DEFAULT_ASS_STYLE: Required<AssStyleOptions> = {
+  fontName: 'Arial',
+  fontSize: 48,
+};
+
 // ---- Helpers ----
 
 let _idCounter = 0;
@@ -303,6 +313,166 @@ export function parseASS(content: string): { entries: SubtitleEntry[]; header: s
 
 // ---- Serializers ----
 
+function sanitizeAssFontName(fontName?: string): string {
+  const value = (fontName || DEFAULT_ASS_STYLE.fontName).replace(/,/g, '').trim();
+  return value || DEFAULT_ASS_STYLE.fontName;
+}
+
+function normalizeAssFontSize(fontSize?: number): number {
+  if (!Number.isFinite(fontSize)) return DEFAULT_ASS_STYLE.fontSize;
+  return Math.max(8, Math.min(120, Math.round(fontSize as number)));
+}
+
+function getAssStyleMeta(header: string): {
+  lines: string[];
+  formatCols: string[];
+  styleLineIndex: number;
+  fontNameIndex: number;
+  fontSizeIndex: number;
+} | null {
+  const lines = header.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+
+  let stylesStart = -1;
+  let stylesEnd = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmedLower = lines[i].trim().toLowerCase();
+    if (trimmedLower === '[v4+ styles]' || trimmedLower === '[v4 styles]') {
+      stylesStart = i;
+      continue;
+    }
+    if (stylesStart >= 0 && i > stylesStart && trimmedLower.startsWith('[')) {
+      stylesEnd = i;
+      break;
+    }
+  }
+  if (stylesStart < 0) return null;
+
+  let formatCols: string[] = [];
+  let formatIndex = -1;
+  for (let i = stylesStart + 1; i < stylesEnd; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed.toLowerCase().startsWith('format:')) {
+      formatIndex = i;
+      formatCols = trimmed
+        .slice(trimmed.indexOf(':') + 1)
+        .split(',')
+        .map((c) => c.trim().toLowerCase());
+      break;
+    }
+  }
+  if (formatIndex < 0) return null;
+
+  const nameIndex = formatCols.indexOf('name');
+  const fontNameIndex = formatCols.indexOf('fontname');
+  const fontSizeIndex = formatCols.indexOf('fontsize');
+  if (fontNameIndex < 0 && fontSizeIndex < 0) return null;
+
+  const parseFields = (line: string) =>
+    line
+      .slice(line.indexOf(':') + 1)
+      .split(',')
+      .map((v) => v.trim());
+
+  let styleLineIndex = -1;
+  let fallbackStyleIndex = -1;
+
+  for (let i = formatIndex + 1; i < stylesEnd; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed.toLowerCase().startsWith('style:')) continue;
+    if (fallbackStyleIndex < 0) fallbackStyleIndex = i;
+
+    if (nameIndex >= 0) {
+      const fields = parseFields(trimmed);
+      const styleName = fields[nameIndex]?.toLowerCase() || '';
+      if (styleName === 'default') {
+        styleLineIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (styleLineIndex < 0) styleLineIndex = fallbackStyleIndex;
+  if (styleLineIndex < 0) return null;
+
+  return {
+    lines,
+    formatCols,
+    styleLineIndex,
+    fontNameIndex,
+    fontSizeIndex,
+  };
+}
+
+function buildDefaultAssHeader(style?: AssStyleOptions): string {
+  const fontName = sanitizeAssFontName(style?.fontName);
+  const fontSize = normalizeAssFontSize(style?.fontSize);
+  return `[Script Info]
+Title: Subtitle File
+ScriptType: v4.00+
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,${fontName},${fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1`;
+}
+
+export function extractAssStyleFromHeader(header?: string): Required<AssStyleOptions> {
+  if (!header?.trim()) {
+    return { ...DEFAULT_ASS_STYLE };
+  }
+
+  const meta = getAssStyleMeta(header);
+  if (!meta) {
+    return { ...DEFAULT_ASS_STYLE };
+  }
+
+  const styleLine = meta.lines[meta.styleLineIndex].trim();
+  const fields = styleLine
+    .slice(styleLine.indexOf(':') + 1)
+    .split(',')
+    .map((v) => v.trim());
+  while (fields.length < meta.formatCols.length) fields.push('');
+
+  const fontName = sanitizeAssFontName(fields[meta.fontNameIndex]);
+  const fontSize = normalizeAssFontSize(Number(fields[meta.fontSizeIndex]));
+  return { fontName, fontSize };
+}
+
+export function applyAssStyleToHeader(header: string | undefined, style?: AssStyleOptions): string {
+  const fontName = sanitizeAssFontName(style?.fontName);
+  const fontSize = normalizeAssFontSize(style?.fontSize);
+
+  if (!header?.trim()) {
+    return buildDefaultAssHeader({ fontName, fontSize });
+  }
+
+  const meta = getAssStyleMeta(header);
+  if (!meta) {
+    return header;
+  }
+
+  const styleLine = meta.lines[meta.styleLineIndex].trim();
+  const fields = styleLine
+    .slice(styleLine.indexOf(':') + 1)
+    .split(',')
+    .map((v) => v.trim());
+  while (fields.length < meta.formatCols.length) fields.push('');
+
+  if (meta.fontNameIndex >= 0) {
+    fields[meta.fontNameIndex] = fontName;
+  }
+  if (meta.fontSizeIndex >= 0) {
+    fields[meta.fontSizeIndex] = String(fontSize);
+  }
+
+  meta.lines[meta.styleLineIndex] = `Style: ${fields.join(',')}`;
+  return meta.lines.join('\n').trimEnd();
+}
+
 export function serializeSRT(entries: SubtitleEntry[]): string {
   return entries
     .map((entry, i) => {
@@ -327,21 +497,12 @@ export function serializeVTT(entries: SubtitleEntry[]): string {
   return header + body;
 }
 
-export function serializeASS(entries: SubtitleEntry[], assHeader?: string): string {
-  const header =
-    assHeader ||
-    `[Script Info]
-Title: Subtitle File
-ScriptType: v4.00+
-WrapStyle: 0
-ScaledBorderAndShadow: yes
-YCbCr Matrix: TV.709
-PlayResX: 1920
-PlayResY: 1080
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,48,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1`;
+export function serializeASS(
+  entries: SubtitleEntry[],
+  assHeader?: string,
+  assStyle?: AssStyleOptions,
+): string {
+  const header = applyAssStyleToHeader(assHeader, assStyle);
 
   const events = `\n\n[Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`;
@@ -411,12 +572,13 @@ export function serializeSubtitles(
   entries: SubtitleEntry[],
   format: SubtitleFormat,
   assHeader?: string,
+  assStyle?: AssStyleOptions,
 ): string {
   switch (format) {
     case 'vtt':
       return serializeVTT(entries);
     case 'ass':
-      return serializeASS(entries, assHeader);
+      return serializeASS(entries, assHeader, assStyle);
     default:
       return serializeSRT(entries);
   }

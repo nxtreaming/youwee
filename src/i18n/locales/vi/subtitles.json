@@ -53,7 +53,7 @@
       "aiTools": "AI tools: tạo sub bằng Whisper, dịch, sửa ngữ pháp/phong cách",
       "batchProject": "Batch/project tools: convert nhiều file và nối vào project"
     },
-    "shortcuts": "Gợi ý: Ctrl/Cmd+S để lưu, Ctrl/Cmd+F để tìm & thay thế."
+    "shortcuts": "Gợi ý: Ctrl/Cmd+S để lưu, Ctrl/Cmd+F để tìm & thay thế, Shift+Enter để xuống dòng."
   },
   "toolbar": {
     "open": "Mở",
@@ -75,6 +75,7 @@
     "fixErrors": "Sửa lỗi",
     "merge": "Gộp",
     "splitMerge": "Tách & Gộp",
+    "lineBreak": "Xuống dòng",
     "split": "Tách",
     "download": "Tải phụ đề",
     "whisper": "Tạo (Whisper)",
@@ -107,7 +108,8 @@
     "total": "{{count}} mục",
     "currentTime": "Hiện tại: {{time}}",
     "unsavedChanges": "Có thay đổi chưa lưu",
-    "modified": "Đã sửa"
+    "modified": "Đã sửa",
+    "lineBreakHint": "Nhấn Shift+Enter để xuống dòng"
   },
   "qc": {
     "title": "QC realtime",
@@ -153,6 +155,13 @@
   "styleProfiles": {
     "title": "Profile style phụ đề",
     "description": "Chọn profile để áp dụng ngưỡng QC realtime và chuẩn hóa nhanh nếu cần.",
+    "fontTitle": "Font ASS",
+    "fontDescription": "Đặt font và cỡ chữ mặc định khi xuất ASS và preview phụ đề.",
+    "fontPreset": "Preset",
+    "fontName": "Tên font",
+    "fontSize": "Cỡ chữ",
+    "customFont": "Tùy chỉnh",
+    "applyFont": "Áp dụng font",
     "affects": "Profile ảnh hưởng ngưỡng QC/Fix (CPS, WPM, CPL, thời lượng, khoảng cách).",
     "useForQcOnly": "Chỉ dùng cho QC",
     "applyNow": "Áp dụng rule profile ngay",

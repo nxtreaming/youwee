@@ -77,7 +77,16 @@
     "sb_music_offtopic_desc": "Non-music sections in music videos",
     "sb_filler": "Filler",
     "sb_filler_desc": "Tangent, off-topic, filler content",
-    "sponsorBlockHint": "Cut = remove from video (requires FFmpeg). Chapter = mark as chapter only."
+    "sponsorBlockHint": "Cut = remove from video (requires FFmpeg). Chapter = mark as chapter only.",
+    "autoRetry": "Auto Retry",
+    "autoRetryDesc": "Automatically retry transient network and live stream errors",
+    "autoRetryEnable": "Enable Auto Retry",
+    "autoRetryEnableDesc": "Retry failed downloads automatically when errors are temporary",
+    "autoRetryConfig": "Retry Policy",
+    "autoRetryConfigDesc": "Set retry attempts and delay between retries",
+    "retryAttempts": "Attempts",
+    "retryDelay": "Delay",
+    "secondsShort": "s"
   },
   "dependencies": {
     "title": "Dependencies",
@@ -260,7 +269,12 @@
     "madeWith": "Made with",
     "by": "by",
     "autoUpdate": "Auto-check for updates",
-    "autoUpdateDesc": "Check for updates when app opens"
+    "autoUpdateDesc": "Check for updates when app opens",
+    "shareTitle": "Share Youwee",
+    "shareDesc": "Share Youwee with your friends on popular social platforms.",
+    "shareText": "Check out Youwee - a modern desktop app for downloading and processing videos.",
+    "copyLink": "Copy link",
+    "copied": "Copied"
   },
   "system": {
     "title": "System",

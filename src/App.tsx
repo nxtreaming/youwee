@@ -111,6 +111,17 @@ function AppContent() {
     };
   }, [updater.checkForUpdate]);
 
+  // Open settings page from system tray action
+  useEffect(() => {
+    const unlisten = listen('tray-open-settings', () => {
+      setCurrentPage('settings');
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   // Sync UI language to system tray on mount
   useEffect(() => {
     const lang = localStorage.getItem('i18nextLng') || 'en';

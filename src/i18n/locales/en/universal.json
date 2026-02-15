@@ -35,9 +35,16 @@
     "outputFormat": "Output format",
     "advanced": "Advanced Settings",
     "more": "More",
-    "liveFromStart": "Live from start"
+    "liveFromStart": "Live from start",
+    "autoRetry": "Auto Retry",
+    "retryAttempts": "Attempts",
+    "retryDelaySeconds": "Delay (s)"
   },
   "quality": {
+    "360": "Low 360p",
+    "480": "SD 480p",
+    "720": "HD 720p",
+    "1080": "Full HD 1080p",
     "best": "Best Available",
     "bestShort": "Best",
     "8k": "8K Ultra HD",
@@ -46,13 +53,9 @@
     "4kShort": "4K",
     "2k": "2K QHD",
     "2kShort": "2K",
-    "1080": "Full HD 1080p",
     "1080Short": "1080p",
-    "720": "HD 720p",
     "720Short": "720p",
-    "480": "SD 480p",
     "480Short": "480p",
-    "360": "Low 360p",
     "360Short": "360p",
     "audio": "Audio Only",
     "audioShort": "Audio"
@@ -84,7 +87,8 @@
       "downloading": "Downloading",
       "completed": "Completed",
       "failed": "Failed",
-      "failedHint": "View Logs page for details"
+      "failedHint": "View Logs page for details",
+      "retrying": "Retry {{current}}/{{total}} in {{seconds}}s"
     },
     "summarize": "Summarize",
     "fetchingTranscript": "Fetching transcript...",

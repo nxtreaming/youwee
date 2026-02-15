@@ -298,6 +298,7 @@ export function SubtitleVideoPreview() {
                     'bg-black/75 text-white text-sm leading-relaxed',
                     'max-w-full',
                   )}
+                  style={{ fontFamily: subtitle.assStyle.fontName }}
                 >
                   {currentSubText.split('\n').map((line, i) => (
                     <span key={`line-${i}-${line.slice(0, 10)}`}>

@@ -160,6 +160,7 @@ export function QueueItem({
   const isCompleted = item.status === 'completed';
   const isError = item.status === 'error';
   const isPending = item.status === 'pending';
+  const retryState = item.retryState;
 
   // Get saved settings for pending items
   const itemSettings = item.settings as ItemDownloadSettings | undefined;
@@ -399,6 +400,17 @@ export function QueueItem({
               {isError && t('queue.status.failed')}
             </span>
           </span>
+
+          {retryState && (
+            <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-medium tabular-nums">
+              <RefreshCw className="w-3 h-3" />
+              {t('queue.status.retrying', {
+                current: retryState.retryIndex,
+                total: retryState.maxRetries,
+                seconds: retryState.remainingSeconds,
+              })}
+            </span>
+          )}
 
           {/* Settings badges for pending/downloading items */}
           {(isPending || isActive) && itemSettings && (

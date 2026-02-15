@@ -53,7 +53,7 @@
       "aiTools": "AI 工具：Whisper 生成、翻译、语法/风格修复",
       "batchProject": "批处理/项目工具：多文件转换与追加"
     },
-    "shortcuts": "提示：Ctrl/Cmd+S 保存，Ctrl/Cmd+F 查找替换。"
+    "shortcuts": "提示：Ctrl/Cmd+S 保存，Ctrl/Cmd+F 查找替换，Shift+Enter 换行。"
   },
   "toolbar": {
     "open": "打开",
@@ -75,6 +75,7 @@
     "fixErrors": "修复错误",
     "merge": "合并",
     "splitMerge": "拆分与合并",
+    "lineBreak": "自动换行",
     "split": "拆分",
     "download": "下载字幕",
     "whisper": "生成 (Whisper)",
@@ -107,7 +108,8 @@
     "total": "共 {{count}} 条",
     "currentTime": "当前: {{time}}",
     "unsavedChanges": "有未保存的更改",
-    "modified": "已修改"
+    "modified": "已修改",
+    "lineBreakHint": "按 Shift+Enter 可插入换行"
   },
   "qc": {
     "title": "实时质检",
@@ -153,6 +155,13 @@
   "styleProfiles": {
     "title": "字幕风格预设",
     "description": "选择预设以驱动实时质检阈值，并可一键按预设规范化字幕。",
+    "fontTitle": "ASS 字体",
+    "fontDescription": "设置 ASS 导出与字幕预览的默认字体与字号。",
+    "fontPreset": "预设",
+    "fontName": "字体",
+    "fontSize": "字号",
+    "customFont": "自定义",
+    "applyFont": "应用字体",
     "affects": "预设会影响 QC/Fix 阈值（CPS、WPM、CPL、时长、间隔）。",
     "useForQcOnly": "仅用于质检",
     "applyNow": "立即应用预设规则",

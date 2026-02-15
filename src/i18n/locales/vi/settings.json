@@ -77,7 +77,16 @@
     "sb_music_offtopic_desc": "Phần không phải nhạc trong video nhạc",
     "sb_filler": "Nội dung rỗng",
     "sb_filler_desc": "Lan man, lạc đề",
-    "sponsorBlockHint": "Cắt = xóa khỏi video (cần FFmpeg). Chapter = chỉ đánh dấu thành chapter."
+    "sponsorBlockHint": "Cắt = xóa khỏi video (cần FFmpeg). Chapter = chỉ đánh dấu thành chapter.",
+    "autoRetry": "Tự động thử lại",
+    "autoRetryDesc": "Tự động thử lại khi lỗi mạng hoặc live stream tạm thời",
+    "autoRetryEnable": "Bật tự động thử lại",
+    "autoRetryEnableDesc": "Tự động thử lại khi tải xuống gặp lỗi tạm thời",
+    "autoRetryConfig": "Chính sách thử lại",
+    "autoRetryConfigDesc": "Đặt số lần thử lại và thời gian chờ giữa mỗi lần",
+    "retryAttempts": "Số lần",
+    "retryDelay": "Độ trễ",
+    "secondsShort": "giây"
   },
   "dependencies": {
     "title": "Phụ thuộc",
@@ -260,7 +269,12 @@
     "madeWith": "Làm với",
     "by": "bởi",
     "autoUpdate": "Tự động kiểm tra cập nhật",
-    "autoUpdateDesc": "Kiểm tra cập nhật khi mở ứng dụng"
+    "autoUpdateDesc": "Kiểm tra cập nhật khi mở ứng dụng",
+    "shareTitle": "Chia sẻ Youwee",
+    "shareDesc": "Chia sẻ Youwee cho bạn bè qua các mạng xã hội phổ biến.",
+    "shareText": "Thử Youwee nhé - ứng dụng desktop hiện đại để tải và xử lý video.",
+    "copyLink": "Sao chép link",
+    "copied": "Đã sao chép"
   },
   "system": {
     "title": "Hệ thống",

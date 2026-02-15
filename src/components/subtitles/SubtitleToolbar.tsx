@@ -16,6 +16,7 @@ import {
   Scissors,
   Search,
   Sparkles,
+  SplitSquareHorizontal,
   Timer,
   Trash2,
   Undo2,
@@ -35,6 +36,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useSubtitle } from '@/contexts/SubtitleContext';
+import { fixLineBreaking } from '@/lib/subtitle-fixes';
 import type { SubtitleFormat } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -214,6 +216,37 @@ export function SubtitleToolbar({
     }
   }, [subtitle]);
 
+  const handleAutoLineBreak = useCallback(() => {
+    const maxChars = subtitle.qcThresholds.maxCpl;
+    const selected = Array.from(subtitle.selectedIds);
+    const selectedSet = new Set(selected);
+    const targetEntries =
+      selected.length > 0
+        ? subtitle.entries.filter((entry) => selectedSet.has(entry.id))
+        : subtitle.entries;
+
+    if (targetEntries.length === 0) return;
+
+    const normalizedMap = new Map(
+      fixLineBreaking(targetEntries, maxChars).map((entry) => [entry.id, entry]),
+    );
+    let changed = false;
+    const nextEntries = subtitle.entries.map((entry) => {
+      const updated = normalizedMap.get(entry.id);
+      if (!updated) return entry;
+      if (updated.text !== entry.text) {
+        changed = true;
+      }
+      return updated;
+    });
+
+    if (!changed) return;
+    subtitle.replaceAllEntries(
+      nextEntries,
+      selected.length > 0 ? 'Auto line break selected entries' : 'Auto line break all entries',
+    );
+  }, [subtitle]);
+
   const selectedCount = subtitle.selectedIds.size;
 
   return (
@@ -328,6 +361,12 @@ export function SubtitleToolbar({
             icon={<Scissors className="w-3.5 h-3.5" />}
             label={t('toolbar.splitMerge')}
             onClick={() => onShowSplitMerge?.()}
+          />
+          <ToolbarButton
+            icon={<SplitSquareHorizontal className="w-3.5 h-3.5" />}
+            label={t('toolbar.lineBreak')}
+            onClick={handleAutoLineBreak}
+            disabled={subtitle.entries.length === 0}
           />
           <ToolbarButton
             icon={<Search className="w-3.5 h-3.5" />}

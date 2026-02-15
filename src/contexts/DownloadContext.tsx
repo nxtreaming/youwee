@@ -12,6 +12,15 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  AUTO_RETRY_LIMITS,
+  clampAutoRetryDelaySeconds,
+  clampAutoRetryMaxAttempts,
+  isNonRetryableError,
+  isRetryableError,
+  normalizeErrorMessage,
+  waitWithCancellation,
+} from '@/lib/download-retry';
 import type {
   AudioBitrate,
   CookieSettings,
@@ -171,6 +180,12 @@ function saveSettings(settings: DownloadSettings) {
         embedMetadata: settings.embedMetadata,
         embedThumbnail: settings.embedThumbnail,
         liveFromStart: settings.liveFromStart,
+        speedLimitEnabled: settings.speedLimitEnabled,
+        speedLimitValue: settings.speedLimitValue,
+        speedLimitUnit: settings.speedLimitUnit,
+        autoRetryEnabled: settings.autoRetryEnabled,
+        autoRetryMaxAttempts: settings.autoRetryMaxAttempts,
+        autoRetryDelaySeconds: settings.autoRetryDelaySeconds,
         sponsorBlock: settings.sponsorBlock,
         sponsorBlockMode: settings.sponsorBlockMode,
         sponsorBlockCategories: settings.sponsorBlockCategories,
@@ -239,6 +254,8 @@ interface DownloadContextType {
   updateLiveFromStart: (enabled: boolean) => void;
   // Speed limit settings
   updateSpeedLimit: (enabled: boolean, value: number, unit: 'K' | 'M' | 'G') => void;
+  // Auto retry settings
+  updateAutoRetry: (enabled: boolean, maxAttempts: number, delaySeconds: number) => void;
   // SponsorBlock settings
   updateSponsorBlock: (enabled: boolean) => void;
   updateSponsorBlockMode: (mode: SponsorBlockMode) => void;
@@ -290,6 +307,14 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       speedLimitEnabled: saved.speedLimitEnabled === true, // Default to false (unlimited)
       speedLimitValue: saved.speedLimitValue || 10,
       speedLimitUnit: saved.speedLimitUnit || 'M',
+      // Auto retry settings
+      autoRetryEnabled: saved.autoRetryEnabled === true, // Default to false
+      autoRetryMaxAttempts: clampAutoRetryMaxAttempts(
+        saved.autoRetryMaxAttempts || AUTO_RETRY_LIMITS.maxAttempts.default,
+      ),
+      autoRetryDelaySeconds: clampAutoRetryDelaySeconds(
+        saved.autoRetryDelaySeconds || AUTO_RETRY_LIMITS.delaySeconds.default,
+      ),
       // SponsorBlock settings
       sponsorBlock: saved.sponsorBlock === true, // Default to false
       sponsorBlockMode: saved.sponsorBlockMode || 'remove',
@@ -436,6 +461,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
                       ? 'error'
                       : 'downloading',
                 error: progress.error_message,
+                retryState: undefined,
                 playlistIndex: progress.playlist_index,
                 playlistTotal: progress.playlist_count,
                 downloadedSize: progress.downloaded_size,
@@ -507,6 +533,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       subtitleLangs: [...currentSettings.subtitleLangs],
       subtitleEmbed: currentSettings.subtitleEmbed,
       subtitleFormat: currentSettings.subtitleFormat,
+      autoRetryEnabled: currentSettings.autoRetryEnabled,
+      autoRetryMaxAttempts: currentSettings.autoRetryMaxAttempts,
+      autoRetryDelaySeconds: currentSettings.autoRetryDelaySeconds,
     };
 
     const newItems: DownloadItem[] = urls
@@ -623,6 +652,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
           subtitleLangs: [...settingsRef.current.subtitleLangs],
           subtitleEmbed: settingsRef.current.subtitleEmbed,
           subtitleFormat: settingsRef.current.subtitleFormat,
+          autoRetryEnabled: settingsRef.current.autoRetryEnabled,
+          autoRetryMaxAttempts: settingsRef.current.autoRetryMaxAttempts,
+          autoRetryDelaySeconds: settingsRef.current.autoRetryDelaySeconds,
         };
 
         // Add items with titles and thumbnails from playlist data
@@ -799,6 +831,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
             speed: '',
             eta: '',
             error: undefined,
+            retryState: undefined,
             // Keep playlistIndex and playlistTotal for display
           };
         }
@@ -812,81 +845,157 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     const downloadItem = async (item: DownloadItem) => {
       if (!isDownloadingRef.current) return;
 
-      setItems((items) =>
-        items.map((i) => (i.id === item.id ? { ...i, status: 'downloading' } : i)),
+      // Use item's saved settings (snapshot from when it was added)
+      // Fallback to current global settings if not available
+      const itemSettings = item.settings as ItemDownloadSettings | undefined;
+      const logStderr = localStorage.getItem('youwee_log_stderr') !== 'false';
+      const sponsorBlockArgs = buildSponsorBlockArgs(settings);
+
+      const autoRetryEnabled = itemSettings?.autoRetryEnabled ?? settings.autoRetryEnabled;
+      const maxRetries = clampAutoRetryMaxAttempts(
+        itemSettings?.autoRetryMaxAttempts ?? settings.autoRetryMaxAttempts,
+      );
+      const retryDelaySeconds = clampAutoRetryDelaySeconds(
+        itemSettings?.autoRetryDelaySeconds ?? settings.autoRetryDelaySeconds,
       );
 
-      try {
-        // Use item's saved settings (snapshot from when it was added)
-        // Fallback to current global settings if not available
-        const itemSettings = item.settings as ItemDownloadSettings | undefined;
-        const logStderr = localStorage.getItem('youwee_log_stderr') !== 'false';
+      let retryIndex = 0;
 
-        const sponsorBlockArgs = buildSponsorBlockArgs(settings);
-
-        await invoke('download_video', {
-          id: item.id,
-          url: item.url,
-          outputPath: itemSettings?.outputPath ?? settings.outputPath,
-          quality: itemSettings?.quality ?? settings.quality,
-          format: itemSettings?.format ?? settings.format,
-          downloadPlaylist: false, // Always false - playlist already expanded
-          videoCodec: itemSettings?.videoCodec ?? settings.videoCodec,
-          audioBitrate: itemSettings?.audioBitrate ?? settings.audioBitrate,
-          playlistLimit: null, // Not needed
-          // Subtitle settings
-          subtitleMode: itemSettings?.subtitleMode ?? settings.subtitleMode,
-          subtitleLangs: (itemSettings?.subtitleLangs ?? settings.subtitleLangs).join(','),
-          subtitleEmbed: itemSettings?.subtitleEmbed ?? settings.subtitleEmbed,
-          subtitleFormat: itemSettings?.subtitleFormat ?? settings.subtitleFormat,
-          // Logging settings
-          logStderr,
-          // YouTube specific settings
-          useBunRuntime: settings.useBunRuntime,
-          useActualPlayerJs: settings.useActualPlayerJs,
-          // Cookie settings
-          cookieMode: cookieSettings.mode,
-          cookieBrowser: cookieSettings.browser || null,
-          cookieBrowserProfile: cookieSettings.browserProfile || null,
-          cookieFilePath: cookieSettings.filePath || null,
-          // Proxy settings
-          proxyUrl: buildProxyUrl(proxySettings) || null,
-          // Post-processing settings
-          embedMetadata: settings.embedMetadata,
-          embedThumbnail: settings.embedThumbnail,
-          // Live stream settings
-          liveFromStart: settings.liveFromStart,
-          // Speed limit settings
-          speedLimit: settings.speedLimitEnabled
-            ? `${settings.speedLimitValue}${settings.speedLimitUnit}`
-            : null,
-          // SponsorBlock settings
-          sponsorblockRemove: sponsorBlockArgs.remove,
-          sponsorblockMark: sponsorBlockArgs.mark,
-          // Download sections (time range)
-          downloadSections:
-            itemSettings?.timeRangeStart && itemSettings?.timeRangeEnd
-              ? `*${itemSettings.timeRangeStart}-${itemSettings.timeRangeEnd}`
-              : null,
-          // No history_id for new downloads
-          historyId: null,
-          // Title from video info fetch
-          title: item.title || null,
-          // Thumbnail from video info fetch
-          thumbnail: item.thumbnail || null,
-          // Source/extractor from video info fetch
-          source: item.extractor || null,
-        });
-
-        setItems((items) =>
-          items.map((i) => (i.id === item.id ? { ...i, status: 'completed', progress: 100 } : i)),
-        );
-      } catch (error) {
+      while (isDownloadingRef.current) {
         setItems((items) =>
           items.map((i) =>
-            i.id === item.id ? { ...i, status: 'error', error: String(error) } : i,
+            i.id === item.id
+              ? { ...i, status: 'downloading', error: undefined, retryState: undefined }
+              : i,
           ),
         );
+
+        try {
+          await invoke('download_video', {
+            id: item.id,
+            url: item.url,
+            outputPath: itemSettings?.outputPath ?? settings.outputPath,
+            quality: itemSettings?.quality ?? settings.quality,
+            format: itemSettings?.format ?? settings.format,
+            downloadPlaylist: false, // Always false - playlist already expanded
+            videoCodec: itemSettings?.videoCodec ?? settings.videoCodec,
+            audioBitrate: itemSettings?.audioBitrate ?? settings.audioBitrate,
+            playlistLimit: null, // Not needed
+            // Subtitle settings
+            subtitleMode: itemSettings?.subtitleMode ?? settings.subtitleMode,
+            subtitleLangs: (itemSettings?.subtitleLangs ?? settings.subtitleLangs).join(','),
+            subtitleEmbed: itemSettings?.subtitleEmbed ?? settings.subtitleEmbed,
+            subtitleFormat: itemSettings?.subtitleFormat ?? settings.subtitleFormat,
+            // Logging settings
+            logStderr,
+            // YouTube specific settings
+            useBunRuntime: settings.useBunRuntime,
+            useActualPlayerJs: settings.useActualPlayerJs,
+            // Cookie settings
+            cookieMode: cookieSettings.mode,
+            cookieBrowser: cookieSettings.browser || null,
+            cookieBrowserProfile: cookieSettings.browserProfile || null,
+            cookieFilePath: cookieSettings.filePath || null,
+            // Proxy settings
+            proxyUrl: buildProxyUrl(proxySettings) || null,
+            // Post-processing settings
+            embedMetadata: settings.embedMetadata,
+            embedThumbnail: settings.embedThumbnail,
+            // Live stream settings
+            liveFromStart: settings.liveFromStart,
+            // Speed limit settings
+            speedLimit: settings.speedLimitEnabled
+              ? `${settings.speedLimitValue}${settings.speedLimitUnit}`
+              : null,
+            // SponsorBlock settings
+            sponsorblockRemove: sponsorBlockArgs.remove,
+            sponsorblockMark: sponsorBlockArgs.mark,
+            // Download sections (time range)
+            downloadSections:
+              itemSettings?.timeRangeStart && itemSettings?.timeRangeEnd
+                ? `*${itemSettings.timeRangeStart}-${itemSettings.timeRangeEnd}`
+                : null,
+            // No history_id for new downloads
+            historyId: null,
+            // Title from video info fetch
+            title: item.title || null,
+            // Thumbnail from video info fetch
+            thumbnail: item.thumbnail || null,
+            // Source/extractor from video info fetch
+            source: item.extractor || null,
+          });
+
+          setItems((items) =>
+            items.map((i) =>
+              i.id === item.id
+                ? { ...i, status: 'completed', progress: 100, retryState: undefined }
+                : i,
+            ),
+          );
+          return;
+        } catch (error) {
+          const errorMessage = normalizeErrorMessage(error);
+          const canRetry =
+            isDownloadingRef.current &&
+            autoRetryEnabled &&
+            retryIndex < maxRetries &&
+            !isNonRetryableError(errorMessage) &&
+            isRetryableError(errorMessage);
+
+          if (!canRetry) {
+            setItems((items) =>
+              items.map((i) =>
+                i.id === item.id
+                  ? { ...i, status: 'error', error: errorMessage, retryState: undefined }
+                  : i,
+              ),
+            );
+            return;
+          }
+
+          retryIndex += 1;
+          setItems((items) =>
+            items.map((i) =>
+              i.id === item.id
+                ? {
+                    ...i,
+                    status: 'pending',
+                    error: errorMessage,
+                    retryState: {
+                      retryIndex,
+                      maxRetries,
+                      delaySeconds: retryDelaySeconds,
+                      remainingSeconds: retryDelaySeconds,
+                    },
+                  }
+                : i,
+            ),
+          );
+
+          const shouldContinue = await waitWithCancellation(
+            retryDelaySeconds * 1000,
+            () => !isDownloadingRef.current,
+            (remainingSeconds) => {
+              setItems((items) =>
+                items.map((i) =>
+                  i.id === item.id && i.retryState
+                    ? {
+                        ...i,
+                        retryState: {
+                          ...i.retryState,
+                          remainingSeconds,
+                        },
+                      }
+                    : i,
+                ),
+              );
+            },
+          );
+
+          if (!shouldContinue) {
+            return;
+          }
+        }
       }
     };
 
@@ -925,6 +1034,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Failed to stop download:', error);
     }
+    setItems((items) => items.map((item) => ({ ...item, retryState: undefined })));
     setIsDownloading(false);
     isDownloadingRef.current = false;
     setCurrentPlaylistInfo(null);
@@ -1115,6 +1225,22 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const updateAutoRetry = useCallback(
+    (autoRetryEnabled: boolean, autoRetryMaxAttempts: number, autoRetryDelaySeconds: number) => {
+      setSettings((s) => {
+        const newSettings = {
+          ...s,
+          autoRetryEnabled,
+          autoRetryMaxAttempts: clampAutoRetryMaxAttempts(autoRetryMaxAttempts),
+          autoRetryDelaySeconds: clampAutoRetryDelaySeconds(autoRetryDelaySeconds),
+        };
+        saveSettings(newSettings);
+        return newSettings;
+      });
+    },
+    [],
+  );
+
   const updateSponsorBlock = useCallback((sponsorBlock: boolean) => {
     setSettings((s) => {
       const newSettings = { ...s, sponsorBlock };
@@ -1156,7 +1282,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       // Reset item status to pending
       setItems((currentItems) =>
         currentItems.map((item) =>
-          item.id === itemId ? { ...item, status: 'pending', progress: 0, error: undefined } : item,
+          item.id === itemId
+            ? { ...item, status: 'pending', progress: 0, error: undefined, retryState: undefined }
+            : item,
         ),
       );
       // Clear cookie error
@@ -1211,6 +1339,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     updateEmbedThumbnail,
     updateLiveFromStart,
     updateSpeedLimit,
+    updateAutoRetry,
     // SponsorBlock settings
     updateSponsorBlock,
     updateSponsorBlockMode,

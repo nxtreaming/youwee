@@ -8,7 +8,9 @@ import {
   useState,
 } from 'react';
 import {
+  type AssStyleOptions,
   createEmptyEntry,
+  extractAssStyleFromHeader,
   generateEntryId,
   parseSubtitles,
   reindexEntries,
@@ -32,6 +34,13 @@ interface HistoryState {
 }
 
 const MAX_UNDO_HISTORY = 50;
+const SUBTITLE_ASS_FONT_NAME_KEY = 'subtitle_ass_font_name';
+const SUBTITLE_ASS_FONT_SIZE_KEY = 'subtitle_ass_font_size';
+
+const DEFAULT_ASS_STYLE: Required<AssStyleOptions> = {
+  fontName: 'Arial',
+  fontSize: 48,
+};
 
 // ---- Context Value ----
 
@@ -41,6 +50,7 @@ interface SubtitleContextValue {
   entries: SubtitleEntry[];
   format: SubtitleFormat;
   assHeader: string | undefined;
+  assStyle: Required<AssStyleOptions>;
   filePath: string | null;
   fileName: string | null;
   isDirty: boolean;
@@ -80,6 +90,7 @@ interface SubtitleContextValue {
   setFilePath: (path: string | null) => void;
   markSaved: () => void;
   setStyleProfile: (profileId: SubtitleStyleProfileId) => void;
+  setAssStyle: (updates: Partial<Required<AssStyleOptions>>) => void;
 
   // Entry operations
   updateEntry: (id: string, updates: Partial<SubtitleEntry>) => void;
@@ -123,6 +134,16 @@ export function SubtitleProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<SubtitleEntry[]>([]);
   const [format, setFormatState] = useState<SubtitleFormat>('srt');
   const [assHeader, setAssHeader] = useState<string | undefined>(undefined);
+  const [assStyle, setAssStyleState] = useState<Required<AssStyleOptions>>(() => {
+    if (typeof window === 'undefined') return DEFAULT_ASS_STYLE;
+    const storedName = window.localStorage.getItem(SUBTITLE_ASS_FONT_NAME_KEY);
+    const storedSize = Number(window.localStorage.getItem(SUBTITLE_ASS_FONT_SIZE_KEY));
+    const fontName = storedName?.trim() || DEFAULT_ASS_STYLE.fontName;
+    const fontSize = Number.isFinite(storedSize)
+      ? Math.max(8, Math.min(120, Math.round(storedSize)))
+      : DEFAULT_ASS_STYLE.fontSize;
+    return { fontName, fontSize };
+  });
   const [filePath, setFilePathState] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -194,10 +215,15 @@ export function SubtitleProvider({ children }: { children: ReactNode }) {
   // File operations
   const loadFromContent = useCallback((content: string, filename: string, fmt?: SubtitleFormat) => {
     const result = parseSubtitles(content, fmt);
+    const detectedAssStyle =
+      result.format === 'ass' ? extractAssStyleFromHeader(result.assHeader) : null;
     setIsWorkspaceOpen(true);
     setEntries(result.entries);
     setFormatState(result.format);
     setAssHeader(result.assHeader);
+    if (detectedAssStyle) {
+      setAssStyleState(detectedAssStyle);
+    }
     setFileName(filename);
     setFilePathState(null);
     setIsDirty(false);
@@ -213,10 +239,14 @@ export function SubtitleProvider({ children }: { children: ReactNode }) {
 
   const loadFromFile = useCallback(
     (newEntries: SubtitleEntry[], fmt: SubtitleFormat, path: string, header?: string) => {
+      const detectedAssStyle = fmt === 'ass' ? extractAssStyleFromHeader(header) : null;
       setIsWorkspaceOpen(true);
       setEntries(newEntries);
       setFormatState(fmt);
       setAssHeader(header);
+      if (detectedAssStyle) {
+        setAssStyleState(detectedAssStyle);
+      }
       setFilePathState(path);
       const name = path.split('/').pop() || path.split('\\').pop() || path;
       setFileName(name);
@@ -279,8 +309,8 @@ export function SubtitleProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getSerializedContent = useCallback(() => {
-    return serializeSubtitles(entries, format, assHeader);
-  }, [entries, format, assHeader]);
+    return serializeSubtitles(entries, format, assHeader, assStyle);
+  }, [entries, format, assHeader, assStyle]);
 
   const setFormat = useCallback((fmt: SubtitleFormat) => {
     setFormatState(fmt);
@@ -306,6 +336,38 @@ export function SubtitleProvider({ children }: { children: ReactNode }) {
       window.localStorage.setItem('subtitle_style_profile', profile.id);
     }
   }, []);
+
+  const setAssStyle = useCallback(
+    (updates: Partial<Required<AssStyleOptions>>) => {
+      setAssStyleState((prev) => {
+        const next = {
+          ...prev,
+          ...updates,
+        };
+        const fontName = (next.fontName || DEFAULT_ASS_STYLE.fontName).trim();
+        const parsedSize = Number(next.fontSize);
+        const fontSize = Number.isFinite(parsedSize)
+          ? Math.max(8, Math.min(120, Math.round(parsedSize)))
+          : DEFAULT_ASS_STYLE.fontSize;
+
+        const normalized = {
+          fontName: fontName || DEFAULT_ASS_STYLE.fontName,
+          fontSize,
+        };
+
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(SUBTITLE_ASS_FONT_NAME_KEY, normalized.fontName);
+          window.localStorage.setItem(SUBTITLE_ASS_FONT_SIZE_KEY, String(normalized.fontSize));
+        }
+        return normalized;
+      });
+
+      if (format === 'ass') {
+        setIsDirty(true);
+      }
+    },
+    [format],
+  );
 
   // Entry operations
   const updateEntry = useCallback(
@@ -594,6 +656,7 @@ export function SubtitleProvider({ children }: { children: ReactNode }) {
     entries,
     format,
     assHeader,
+    assStyle,
     filePath,
     fileName,
     isDirty,
@@ -620,6 +683,7 @@ export function SubtitleProvider({ children }: { children: ReactNode }) {
     setFilePath,
     markSaved,
     setStyleProfile,
+    setAssStyle,
     updateEntry,
     updateEntries,
     insertEntry,

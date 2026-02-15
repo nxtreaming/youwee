@@ -77,7 +77,16 @@
     "sb_music_offtopic_desc": "音乐视频中的非音乐部分",
     "sb_filler": "填充",
     "sb_filler_desc": "跑题、闲聊内容",
-    "sponsorBlockHint": "剪切 = 从视频中删除（需要 FFmpeg）。章节 = 仅标记为章节。"
+    "sponsorBlockHint": "剪切 = 从视频中删除（需要 FFmpeg）。章节 = 仅标记为章节。",
+    "autoRetry": "自动重试",
+    "autoRetryDesc": "在网络或直播临时错误时自动重试",
+    "autoRetryEnable": "启用自动重试",
+    "autoRetryEnableDesc": "当下载遇到临时错误时自动重试",
+    "autoRetryConfig": "重试策略",
+    "autoRetryConfigDesc": "设置重试次数和每次重试间隔",
+    "retryAttempts": "次数",
+    "retryDelay": "间隔",
+    "secondsShort": "秒"
   },
   "dependencies": {
     "title": "依赖项",
@@ -260,7 +269,12 @@
     "madeWith": "用",
     "by": "制作",
     "autoUpdate": "自动检查更新",
-    "autoUpdateDesc": "应用启动时检查更新"
+    "autoUpdateDesc": "应用启动时检查更新",
+    "shareTitle": "分享 Youwee",
+    "shareDesc": "通过主流社交平台把 Youwee 分享给更多朋友。",
+    "shareText": "试试 Youwee——一款现代化的视频下载与处理桌面应用。",
+    "copyLink": "复制链接",
+    "copied": "已复制"
   },
   "system": {
     "title": "系统",

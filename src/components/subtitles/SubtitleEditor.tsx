@@ -401,6 +401,7 @@ export function SubtitleEditor() {
                         {editingCell?.id === entry.id && editingCell.field === 'text' ? (
                           <TextInput
                             value={entry.text}
+                            lineBreakHint={t('editor.lineBreakHint')}
                             onSave={(v) => handleCellSave(entry.id, 'text', v)}
                             onCancel={handleCellCancel}
                           />
@@ -416,6 +417,7 @@ export function SubtitleEditor() {
                       {editingCell?.id === entry.id && editingCell.field === 'text' ? (
                         <TextInput
                           value={entry.text}
+                          lineBreakHint={t('editor.lineBreakHint')}
                           onSave={(v) => handleCellSave(entry.id, 'text', v)}
                           onCancel={handleCellCancel}
                         />
@@ -553,31 +555,42 @@ function TimeInput({
 
 function TextInput({
   value,
+  lineBreakHint,
   onSave,
   onCancel,
 }: {
   value: string;
+  lineBreakHint: string;
   onSave: (v: string) => void;
   onCancel: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [val, setVal] = useState(value.replace(/\n/g, '\\N'));
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [val, setVal] = useState(value);
 
   useEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(96, el.scrollHeight)}px`;
   }, []);
 
   return (
-    <input
+    <textarea
       ref={inputRef}
-      type="text"
+      rows={1}
       value={val}
-      onChange={(e) => setVal(e.target.value)}
+      onChange={(e) => {
+        setVal(e.target.value);
+        const el = inputRef.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${Math.min(96, el.scrollHeight)}px`;
+      }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          // Convert \N back to newlines
           onSave(val.replace(/\\N/g, '\n'));
         }
         if (e.key === 'Escape') {
@@ -587,7 +600,8 @@ function TextInput({
         e.stopPropagation();
       }}
       onBlur={() => onSave(val.replace(/\\N/g, '\n'))}
-      className="w-full text-xs bg-background border border-primary rounded px-1 py-0.5 outline-none"
+      title={lineBreakHint}
+      className="w-full text-xs bg-background border border-primary rounded px-1 py-0.5 outline-none resize-none leading-5"
     />
   );
 }

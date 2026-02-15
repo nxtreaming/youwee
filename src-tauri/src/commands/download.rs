@@ -7,7 +7,9 @@
 //! - Subtitle handling
 
 use std::process::Stdio;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use crate::utils::validate_url;
 use tauri::{AppHandle, Emitter};
@@ -24,6 +26,8 @@ use crate::utils::{build_format_string, parse_progress, format_size, sanitize_ou
 use crate::services::{get_ffmpeg_path, get_deno_path, get_ytdlp_path};
 
 pub static CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
+
+const RECENT_OUTPUT_LIMIT: usize = 30;
 
 /// Kill all yt-dlp and ffmpeg processes
 fn kill_all_download_processes() {
@@ -46,6 +50,54 @@ fn kill_all_download_processes() {
         cmd2.args(["/F", "/IM", "ffmpeg.exe"]);
         cmd2.hide_window();
         cmd2.spawn().ok();
+    }
+}
+
+fn push_recent_output(buffer: &mut VecDeque<String>, line: &str) {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    if buffer.len() >= RECENT_OUTPUT_LIMIT {
+        buffer.pop_front();
+    }
+    buffer.push_back(trimmed.to_string());
+}
+
+fn push_recent_output_shared(buffer: &Arc<Mutex<VecDeque<String>>>, line: &str) {
+    if let Ok(mut guard) = buffer.lock() {
+        push_recent_output(&mut guard, line);
+    }
+}
+
+fn recent_output_snapshot(buffer: &Arc<Mutex<VecDeque<String>>>) -> Vec<String> {
+    buffer
+        .lock()
+        .map(|guard| guard.iter().cloned().collect())
+        .unwrap_or_default()
+}
+
+fn build_download_error_message(exit_code: Option<i32>, recent_lines: &[String]) -> String {
+    let reason = recent_lines
+        .iter()
+        .rev()
+        .find(|line| {
+            let lower = line.to_lowercase();
+            lower.contains("error")
+                || lower.contains("unable")
+                || lower.contains("failed")
+                || lower.contains("http error")
+                || lower.contains("forbidden")
+                || lower.contains("too many requests")
+                || lower.contains("timed out")
+        })
+        .cloned()
+        .or_else(|| recent_lines.last().cloned())
+        .unwrap_or_else(|| "Unknown error".to_string());
+
+    match exit_code {
+        Some(code) => format!("Download failed (exit code {}): {}", code, reason),
+        None => format!("Download failed: {}", reason),
     }
 }
 
@@ -115,6 +167,14 @@ pub async fn download_video(
         "after_move:filepath".to_string(),
         "--no-keep-video".to_string(),
         "--no-keep-fragments".to_string(),
+        "--retries".to_string(),
+        "3".to_string(),
+        "--fragment-retries".to_string(),
+        "3".to_string(),
+        "--extractor-retries".to_string(),
+        "2".to_string(),
+        "--file-access-retries".to_string(),
+        "2".to_string(),
     ];
     
     // Auto use Deno runtime for YouTube (required for JS extractor)
@@ -330,6 +390,7 @@ pub async fn download_video(
             let mut total_filesize: u64 = 0;
             let mut current_stream_size: Option<u64> = None;
             let mut final_filepath: Option<String> = None;
+            let mut recent_output: VecDeque<String> = VecDeque::new();
             
             let quality_display = match quality.as_str() {
                 "8k" => Some("8K".to_string()),
@@ -354,6 +415,7 @@ pub async fn download_video(
                 match event {
                     CommandEvent::Stdout(line_bytes) => {
                         let line = String::from_utf8_lossy(&line_bytes);
+                        push_recent_output(&mut recent_output, &line);
                         
                         // Parse playlist item info
                         if line.contains("Downloading item") {
@@ -446,6 +508,7 @@ pub async fn download_video(
                     }
                     CommandEvent::Stderr(bytes) => {
                         let stderr_line = String::from_utf8_lossy(&bytes).trim().to_string();
+                        push_recent_output(&mut recent_output, &stderr_line);
                         
                         if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&stderr_line) {
                             if pi.is_some() { current_index = pi; }
@@ -576,8 +639,9 @@ pub async fn download_video(
                             app.emit("download-progress", progress).ok();
                             return Ok(());
                         } else {
-                            let error_msg = "Download failed";
-                            add_log_internal("error", error_msg, None, Some(&url)).ok();
+                            let recent_lines: Vec<String> = recent_output.iter().cloned().collect();
+                            let error_msg = build_download_error_message(status.code, &recent_lines);
+                            add_log_internal("error", &error_msg, None, Some(&url)).ok();
                             
                             // Emit error progress so frontend can display error message
                             let progress = DownloadProgress {
@@ -592,13 +656,13 @@ pub async fn download_video(
                                 filesize: None,
                                 resolution: None,
                                 format_ext: None,
-                                error_message: Some(error_msg.to_string()),
+                                error_message: Some(error_msg.clone()),
                                 downloaded_size: None,
                                 elapsed_time: None,
                             };
                             app.emit("download-progress", progress).ok();
                             
-                            return Err(error_msg.to_string());
+                            return Err(error_msg);
                         }
                     }
                     _ => {}
@@ -646,6 +710,7 @@ async fn handle_tokio_download(
     let mut total_filesize: u64 = 0;
     let mut current_stream_size: Option<u64> = None;
     let mut final_filepath: Option<String> = None;
+    let recent_output = Arc::new(Mutex::new(VecDeque::new()));
     
     let quality_display = match quality.as_str() {
         "8k" => Some("8K".to_string()),
@@ -664,6 +729,7 @@ async fn handle_tokio_download(
     let stderr_app = app.clone();
     let stderr_id = id.clone();
     let stderr_url = url.clone();
+    let stderr_recent_output = recent_output.clone();
     let stderr_task = if let Some(stderr_handle) = stderr {
         Some(tokio::spawn(async move {
             let mut stderr_reader = BufReader::new(stderr_handle).lines();
@@ -671,6 +737,7 @@ async fn handle_tokio_download(
                 if CANCEL_FLAG.load(Ordering::SeqCst) {
                     break;
                 }
+                push_recent_output_shared(&stderr_recent_output, &line);
                 
                 // Parse progress from stderr (live streams output here)
                 if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&line) {
@@ -710,6 +777,7 @@ async fn handle_tokio_download(
             kill_all_download_processes();
             return Err("Download cancelled".to_string());
         }
+        push_recent_output_shared(&recent_output, &line);
         
         // Parse progress and emit events
         if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&line) {
@@ -870,8 +938,9 @@ async fn handle_tokio_download(
         app.emit("download-progress", progress).ok();
         Ok(())
     } else {
-        let error_msg = "Download failed";
-        add_log_internal("error", error_msg, None, Some(&url)).ok();
+        let recent_lines = recent_output_snapshot(&recent_output);
+        let error_msg = build_download_error_message(status.code(), &recent_lines);
+        add_log_internal("error", &error_msg, None, Some(&url)).ok();
         
         // Emit error progress so frontend can display error message
         let progress = DownloadProgress {
@@ -886,13 +955,13 @@ async fn handle_tokio_download(
             filesize: None,
             resolution: None,
             format_ext: None,
-            error_message: Some(error_msg.to_string()),
+            error_message: Some(error_msg.clone()),
             downloaded_size: None,
             elapsed_time: None,
         };
         app.emit("download-progress", progress).ok();
         
-        Err(error_msg.to_string())
+        Err(error_msg)
     }
 }
 

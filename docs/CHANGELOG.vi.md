@@ -15,6 +15,18 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Sửa lỗi
 
+## [0.10.1] - 2026-02-15
+
+### Thêm mới
+- **Thiết lập font ASS** - Thêm tùy chỉnh font và cỡ chữ phụ đề cho xuất ASS và preview
+- **Luồng xuống dòng phụ đề** - Thêm thao tác auto xuống dòng nhanh và hỗ trợ Shift+Enter khi chỉnh nội dung
+- **Tự động thử lại có thể cấu hình** - Thêm cài đặt Auto Retry cho tải YouTube và Universal, cho phép đặt số lần thử lại và thời gian chờ để tự phục hồi khi mạng không ổn định hoặc live stream bị ngắt
+
+### Thay đổi
+
+### Sửa lỗi
+- **Thông báo lỗi tải xuống rõ hơn** - Cải thiện thông báo lỗi yt-dlp với nguyên nhân cụ thể hơn để hỗ trợ nhận diện lỗi tạm thời và thử lại tự động chính xác hơn
+
 ## [0.10.0] - 2026-02-15
 
 ### Thêm mới

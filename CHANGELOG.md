@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.10.1] - 2026-02-15
+
+### Added
+- **ASS font settings** - Added configurable subtitle font family/size for ASS export and subtitle preview
+- **Line-break workflow** - Added quick auto line-break action and Shift+Enter newline support while editing subtitle text
+- **Configurable auto retry** - Added Auto Retry settings for YouTube and Universal downloads with customizable retry attempts and delay to recover from unstable network/live interruptions automatically
+
+### Changed
+
+### Fixed
+- **Download failure diagnostics** - Improved yt-dlp failure messages to include clearer error reasons, enabling smarter transient-error retry behavior
+
 ## [0.10.0] - 2026-02-15
 
 ### Added

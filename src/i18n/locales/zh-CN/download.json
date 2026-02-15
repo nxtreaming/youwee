@@ -16,7 +16,16 @@
     "toAdd": "添加",
     "urlCount": "{{count}} 个链接",
     "urlCount_plural": "{{count}} 个链接",
-    "dropHint": "拖放链接或 .txt 文件到此处"
+    "dropHint": "拖放链接或 .txt 文件到此处",
+    "guide": "说明",
+    "guideTitle": "下载说明",
+    "guideDesc": "快速了解高画质下载与音视频合并的关键设置。",
+    "guideHighResTitle": "2K/4K/8K 与 H.264",
+    "guideHighResText": "很多来源的 H.264 最高只有 Full HD。需要 2K/4K/8K 时，建议使用 Auto（或可用时选择 VP9/AV1）。",
+    "guideFfmpegTitle": "下载后视频和音频分成两个文件",
+    "guideFfmpegText": "请在 设置 > Dependencies 安装 FFmpeg，Youwee 才能自动把视频和音频合并为一个输出文件。",
+    "guideOpenSettings": "打开设置",
+    "guideGotIt": "知道了"
   },
   "settings": {
     "video": "视频",
@@ -61,9 +70,16 @@
     "subtitlesNotAvailable": "音频模式下字幕不可用",
     "videoQuality": "视频质量",
     "outputFormat": "输出格式",
-    "totalFileSize": "总文件大小"
+    "totalFileSize": "总文件大小",
+    "autoRetry": "自动重试",
+    "retryAttempts": "次数",
+    "retryDelaySeconds": "间隔（秒）"
   },
   "quality": {
+    "360": "低清 360p",
+    "480": "标清 480p",
+    "720": "高清 720p",
+    "1080": "全高清 1080p",
     "best": "最佳画质",
     "bestShort": "最佳",
     "8k": "8K 超高清",
@@ -72,13 +88,9 @@
     "4kShort": "4K",
     "2k": "2K 高清",
     "2kShort": "2K",
-    "1080": "全高清 1080p",
     "1080Short": "1080p",
-    "720": "高清 720p",
     "720Short": "720p",
-    "480": "标清 480p",
     "480Short": "480p",
-    "360": "低清 360p",
     "360Short": "360p"
   },
   "queue": {
@@ -103,7 +115,8 @@
       "downloading": "下载中",
       "completed": "已完成",
       "failed": "失败",
-      "failedHint": "查看日志页面了解详情"
+      "failedHint": "查看日志页面了解详情",
+      "retrying": "{{seconds}}秒后重试 {{current}}/{{total}}"
     },
     "summarize": "摘要",
     "fetchingTranscript": "获取字幕中...",

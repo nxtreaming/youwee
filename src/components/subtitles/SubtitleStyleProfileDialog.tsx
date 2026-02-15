@@ -1,6 +1,13 @@
 import { Check, Palette, SlidersHorizontal, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useSubtitle } from '@/contexts/SubtitleContext';
 import { fixGaps, fixLineBreaking, fixLongDuration, fixShortDuration } from '@/lib/subtitle-fixes';
 import {
@@ -21,7 +28,29 @@ export function SubtitleStyleProfileDialog({ open, onClose }: SubtitleStyleProfi
   const [selectedProfileId, setSelectedProfileId] = useState<SubtitleStyleProfileId>(
     subtitle.styleProfileId,
   );
+  const [fontName, setFontName] = useState(subtitle.assStyle.fontName);
+  const [fontSize, setFontSize] = useState(subtitle.assStyle.fontSize);
   const [appliedCount, setAppliedCount] = useState(0);
+  const commonFonts = [
+    'Arial',
+    'Helvetica',
+    'Verdana',
+    'Tahoma',
+    'Times New Roman',
+    'Georgia',
+    'Noto Sans',
+    'Roboto',
+    'Inter',
+  ];
+  const customFontValue = '__custom_font__';
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedProfileId(subtitle.styleProfileId);
+    setFontName(subtitle.assStyle.fontName);
+    setFontSize(subtitle.assStyle.fontSize);
+    setAppliedCount(0);
+  }, [open, subtitle.styleProfileId, subtitle.assStyle.fontName, subtitle.assStyle.fontSize]);
 
   const selectedProfile = useMemo(
     () => getSubtitleStyleProfile(selectedProfileId),
@@ -62,11 +91,18 @@ export function SubtitleStyleProfileDialog({ open, onClose }: SubtitleStyleProfi
     setAppliedCount(changed);
   };
 
+  const applyFontSettings = () => {
+    subtitle.setAssStyle({
+      fontName,
+      fontSize,
+    });
+  };
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-card rounded-2xl shadow-2xl border border-border/50 w-[620px] overflow-hidden">
+      <div className="bg-card rounded-2xl shadow-2xl border border-border/50 w-[760px] max-w-[92vw] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/50">
           <div className="flex items-center gap-2">
             <Palette className="w-5 h-5 text-primary" />
@@ -83,6 +119,83 @@ export function SubtitleStyleProfileDialog({ open, onClose }: SubtitleStyleProfi
 
         <div className="p-5 space-y-4">
           <p className="text-sm text-muted-foreground">{t('styleProfiles.description')}</p>
+
+          <div className="rounded-xl border border-border/60 bg-muted/20 p-3.5 space-y-3">
+            <div>
+              <p className="text-sm font-medium">{t('styleProfiles.fontTitle')}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {t('styleProfiles.fontDescription')}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 items-end">
+              <div className="space-y-1">
+                <p className="text-[11px] text-muted-foreground">{t('styleProfiles.fontPreset')}</p>
+                <Select
+                  value={
+                    commonFonts.find(
+                      (font) => font.toLowerCase() === fontName.trim().toLowerCase(),
+                    ) || customFontValue
+                  }
+                  onValueChange={(value) => {
+                    if (value === customFontValue) return;
+                    setFontName(value);
+                  }}
+                >
+                  <SelectTrigger className="h-9 rounded-lg border border-border/70 bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/25">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {commonFonts.map((font) => (
+                      <SelectItem key={font} value={font}>
+                        {font}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={customFontValue}>{t('styleProfiles.customFont')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label
+                  htmlFor="subtitle-ass-font-name"
+                  className="text-[11px] text-muted-foreground"
+                >
+                  {t('styleProfiles.fontName')}
+                </label>
+                <input
+                  id="subtitle-ass-font-name"
+                  value={fontName}
+                  onChange={(e) => setFontName(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-border/70 bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+              <div className="space-y-1">
+                <label
+                  htmlFor="subtitle-ass-font-size"
+                  className="text-[11px] text-muted-foreground"
+                >
+                  {t('styleProfiles.fontSize')}
+                </label>
+                <input
+                  id="subtitle-ass-font-size"
+                  type="number"
+                  min={8}
+                  max={120}
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Number(e.target.value))}
+                  className="w-full h-9 rounded-lg border border-border/70 bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={applyFontSettings}
+                className="px-3.5 py-2 text-sm rounded-lg border border-border/60 hover:bg-accent transition-colors"
+              >
+                {t('styleProfiles.applyFont')}
+              </button>
+            </div>
+          </div>
 
           <div className="grid gap-2">
             {SUBTITLE_STYLE_PROFILES.map((profile) => {

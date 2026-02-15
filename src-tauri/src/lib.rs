@@ -294,6 +294,10 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                         services::polling::stop_polling();
                         services::polling::start_polling(app_handle_menu.clone());
                     }
+                    "settings" => {
+                        show_main_window(&app_handle_menu);
+                        let _ = app_handle_menu.emit("tray-open-settings", ());
+                    }
                     "check_update" => {
                         show_main_window(&app_handle_menu);
                         let _ = app_handle_menu.emit("tray-check-update", ());
@@ -347,7 +351,8 @@ fn tray_text(key: &str) -> &'static str {
         ("vi", "no_channels") => "Chưa theo dõi kênh nào",
         ("vi", "new_suffix") => "mới",
         ("vi", "check_all") => "Kiểm tra kênh theo dõi ngay",
-        ("vi", "check_update") => "Kiểm tra cập nhật ứng dụng",
+        ("vi", "settings") => "Cài đặt",
+        ("vi", "check_update") => "Kiểm tra cập nhật...",
         ("vi", "open") => "Mở Youwee",
         ("vi", "quit") => "Thoát",
         // Chinese
@@ -355,7 +360,8 @@ fn tray_text(key: &str) -> &'static str {
         ("zh-CN", "no_channels") => "尚未关注任何频道",
         ("zh-CN", "new_suffix") => "个新视频",
         ("zh-CN", "check_all") => "立即检查已关注频道",
-        ("zh-CN", "check_update") => "检查应用更新",
+        ("zh-CN", "settings") => "设置",
+        ("zh-CN", "check_update") => "检查更新...",
         ("zh-CN", "open") => "打开 Youwee",
         ("zh-CN", "quit") => "退出",
         // English (default)
@@ -363,7 +369,8 @@ fn tray_text(key: &str) -> &'static str {
         (_, "no_channels") => "No channels followed",
         (_, "new_suffix") => "new",
         (_, "check_all") => "Check Followed Channels Now",
-        (_, "check_update") => "Check App Updates",
+        (_, "settings") => "Settings",
+        (_, "check_update") => "Check for Updates...",
         (_, "open") => "Open Youwee",
         (_, "quit") => "Quit",
         _ => "???",
@@ -401,28 +408,19 @@ fn rebuild_tray_menu_inner(app_handle: &tauri::AppHandle) -> Result<(), Box<dyn 
 
     // Build full menu
     let check_now = MenuItemBuilder::with_id("check_now", tray_text("check_all")).build(app_handle)?;
+    let settings = MenuItemBuilder::with_id("settings", tray_text("settings")).build(app_handle)?;
     let check_update = MenuItemBuilder::with_id("check_update", tray_text("check_update")).build(app_handle)?;
     let show = MenuItemBuilder::with_id("show", tray_text("open")).build(app_handle)?;
     let quit = MenuItemBuilder::with_id("quit", tray_text("quit")).build(app_handle)?;
 
-    let mut menu = MenuBuilder::new(app_handle)
+    let menu = MenuBuilder::new(app_handle)
         .item(&built_submenu)
-        .separator();
-
-    // Show schedule status if active
-    let schedule_status = TRAY_SCHEDULE_STATUS.lock().map(|s| s.clone()).unwrap_or_default();
-    if !schedule_status.is_empty() {
-        let schedule_item = MenuItemBuilder::with_id("schedule_info", &schedule_status)
-            .enabled(false)
-            .build(app_handle)?;
-        menu = menu.item(&schedule_item);
-        menu = menu.separator();
-    }
-
-    let menu = menu
         .item(&check_now)
-        .item(&check_update)
+        .separator()
+        .item(&settings)
         .item(&show)
+        .separator()
+        .item(&check_update)
         .separator()
         .item(&quit)
         .build()?;
