@@ -58,9 +58,13 @@ import type { AIProvider, SummaryStyle } from '@/lib/types';
 import { DEFAULT_TRANSCRIPT_LANGUAGES, LANGUAGE_OPTIONS } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-export function SettingsPage() {
+export function SettingsPage({
+  initialSection = 'general',
+}: {
+  initialSection?: SettingsSectionId;
+}) {
   const { t } = useTranslation('settings');
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>(initialSection);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -72,6 +76,10 @@ export function SettingsPage() {
   useEffect(() => {
     getVersion().then(setAppVersion);
   }, []);
+
+  useEffect(() => {
+    setActiveSection(initialSection);
+  }, [initialSection]);
 
   // Handle search navigation
   const handleSearchNavigate = useCallback((section: SettingsSectionId, settingId: string) => {

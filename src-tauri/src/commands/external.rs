@@ -2,6 +2,8 @@ use std::sync::Mutex;
 
 // Pending deep links received before the frontend listener is ready.
 static PENDING_EXTERNAL_LINKS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+const MAX_PENDING_EXTERNAL_LINKS: usize = 100;
+const MAX_EXTERNAL_LINK_LENGTH: usize = 4096;
 
 #[derive(Clone, serde::Serialize)]
 pub struct ExternalOpenUrlEventPayload {
@@ -11,12 +13,33 @@ pub struct ExternalOpenUrlEventPayload {
 fn extract_external_link_from_arg(arg: &str) -> Option<String> {
     let trimmed = arg.trim().trim_matches('"').trim_matches('\'');
     if trimmed.starts_with("youwee://") {
-        return Some(trimmed.to_string());
+        if is_valid_external_link(trimmed) {
+            return Some(trimmed.to_string());
+        }
+        return None;
     }
 
     trimmed
         .find("youwee://")
-        .map(|start| trimmed[start..].trim_matches('"').to_string())
+        .and_then(|start| {
+            let candidate = trimmed[start..].trim_matches('"').to_string();
+            if is_valid_external_link(&candidate) {
+                Some(candidate)
+            } else {
+                None
+            }
+        })
+}
+
+fn is_valid_external_link(link: &str) -> bool {
+    let trimmed = link.trim();
+    if trimmed.is_empty() || trimmed.len() > MAX_EXTERNAL_LINK_LENGTH {
+        return false;
+    }
+    if !trimmed.starts_with("youwee://download") {
+        return false;
+    }
+    trimmed.contains("v=1") && trimmed.contains("url=")
 }
 
 pub fn extract_external_links_from_argv(argv: &[String]) -> Vec<String> {
@@ -37,8 +60,15 @@ pub fn enqueue_external_links(urls: Vec<String>) {
     }
     if let Ok(mut pending) = PENDING_EXTERNAL_LINKS.lock() {
         for url in urls {
+            if !is_valid_external_link(&url) {
+                continue;
+            }
             if !pending.iter().any(|existing| existing == &url) {
                 pending.push(url);
+                if pending.len() > MAX_PENDING_EXTERNAL_LINKS {
+                    let overflow = pending.len() - MAX_PENDING_EXTERNAL_LINKS;
+                    pending.drain(0..overflow);
+                }
             }
         }
     }

@@ -305,6 +305,10 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     "show" => {
                         show_main_window(&app_handle_menu);
                     }
+                    "browser_extension" => {
+                        show_main_window(&app_handle_menu);
+                        let _ = app_handle_menu.emit("tray-open-extension", ());
+                    }
                     "quit" => {
                         services::polling::stop_polling();
                         app_handle_menu.exit(0);
@@ -354,6 +358,7 @@ fn tray_text(key: &str) -> &'static str {
         ("vi", "settings") => "Cài đặt",
         ("vi", "check_update") => "Kiểm tra cập nhật...",
         ("vi", "open") => "Mở Youwee",
+        ("vi", "browser_extension") => "Browser Extension",
         ("vi", "quit") => "Thoát",
         // Chinese
         ("zh-CN", "followed_channels") => "已关注的频道",
@@ -363,6 +368,7 @@ fn tray_text(key: &str) -> &'static str {
         ("zh-CN", "settings") => "设置",
         ("zh-CN", "check_update") => "检查更新...",
         ("zh-CN", "open") => "打开 Youwee",
+        ("zh-CN", "browser_extension") => "浏览器扩展",
         ("zh-CN", "quit") => "退出",
         // English (default)
         (_, "followed_channels") => "Followed Channels",
@@ -372,6 +378,7 @@ fn tray_text(key: &str) -> &'static str {
         (_, "settings") => "Settings",
         (_, "check_update") => "Check for Updates...",
         (_, "open") => "Open Youwee",
+        (_, "browser_extension") => "Browser Extension",
         (_, "quit") => "Quit",
         _ => "???",
     }
@@ -411,6 +418,7 @@ fn rebuild_tray_menu_inner(app_handle: &tauri::AppHandle) -> Result<(), Box<dyn 
     let settings = MenuItemBuilder::with_id("settings", tray_text("settings")).build(app_handle)?;
     let check_update = MenuItemBuilder::with_id("check_update", tray_text("check_update")).build(app_handle)?;
     let show = MenuItemBuilder::with_id("show", tray_text("open")).build(app_handle)?;
+    let browser_extension = MenuItemBuilder::with_id("browser_extension", tray_text("browser_extension")).build(app_handle)?;
     let quit = MenuItemBuilder::with_id("quit", tray_text("quit")).build(app_handle)?;
 
     let menu = MenuBuilder::new(app_handle)
@@ -419,6 +427,7 @@ fn rebuild_tray_menu_inner(app_handle: &tauri::AppHandle) -> Result<(), Box<dyn 
         .separator()
         .item(&settings)
         .item(&show)
+        .item(&browser_extension)
         .separator()
         .item(&check_update)
         .separator()

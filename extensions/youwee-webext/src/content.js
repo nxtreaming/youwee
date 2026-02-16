@@ -16,8 +16,6 @@
   let lastLocation = location.href;
 
   let root = null;
-  let launcher = null;
-  let collapsedTab = null;
   let panel = null;
   let mediaVideoBtn = null;
   let mediaAudioBtn = null;
@@ -27,6 +25,10 @@
   let openState = false;
   let collapsedState = false;
   let mediaMode = 'video';
+
+  function isTrustedUserEvent(event) {
+    return !!event?.isTrusted;
+  }
 
   function normalizePrefs(raw) {
     if (!raw || typeof raw !== 'object') {
@@ -270,8 +272,6 @@
       root = null;
     }
 
-    launcher = null;
-    collapsedTab = null;
     panel = null;
     mediaVideoBtn = null;
     mediaAudioBtn = null;
@@ -311,7 +311,10 @@
     tab.className = 'youwee-floating__tab';
     tab.title = ext.t('floatingExpand', 'Expand');
     tab.innerHTML = `<img class="youwee-floating__logo-img" src="${logoUrl}" alt="Youwee" />`;
-    tab.addEventListener('click', () => setCollapsedState(false));
+    tab.addEventListener('click', (event) => {
+      if (!isTrustedUserEvent(event)) return;
+      setCollapsedState(false);
+    });
 
     const launch = document.createElement('button');
     launch.type = 'button';
@@ -324,7 +327,10 @@
       <span class="youwee-floating__text">${ext.t('floatingLauncher', 'Youwee')}</span>
       <span class="youwee-floating__chevron">▾</span>
     `;
-    launch.addEventListener('click', () => setPanelOpen(!openState));
+    launch.addEventListener('click', (event) => {
+      if (!isTrustedUserEvent(event)) return;
+      setPanelOpen(!openState);
+    });
 
     const dropdown = document.createElement('div');
     dropdown.className = 'youwee-floating__panel';
@@ -376,8 +382,6 @@
     container.appendChild(launch);
     container.appendChild(dropdown);
 
-    collapsedTab = tab;
-    launcher = launch;
     panel = dropdown;
 
     mediaVideoBtn = /** @type {HTMLButtonElement | null} */ (
@@ -393,22 +397,32 @@
       dropdown.querySelector('.youwee-floating__feedback')
     );
 
-    mediaVideoBtn?.addEventListener('click', () => setMediaValue('video'));
-    mediaAudioBtn?.addEventListener('click', () => setMediaValue('audio'));
+    mediaVideoBtn?.addEventListener('click', (event) => {
+      if (!isTrustedUserEvent(event)) return;
+      setMediaValue('video');
+    });
+    mediaAudioBtn?.addEventListener('click', (event) => {
+      if (!isTrustedUserEvent(event)) return;
+      setMediaValue('audio');
+    });
 
-    dropdown.querySelector('[data-action="download_now"]')?.addEventListener('click', () => {
+    dropdown.querySelector('[data-action="download_now"]')?.addEventListener('click', (event) => {
+      if (!isTrustedUserEvent(event)) return;
       onActionClick('download_now');
     });
 
-    dropdown.querySelector('[data-action="queue_only"]')?.addEventListener('click', () => {
+    dropdown.querySelector('[data-action="queue_only"]')?.addEventListener('click', (event) => {
+      if (!isTrustedUserEvent(event)) return;
       onActionClick('queue_only');
     });
 
-    dropdown.querySelector('[data-action="collapse"]')?.addEventListener('click', () => {
+    dropdown.querySelector('[data-action="collapse"]')?.addEventListener('click', (event) => {
+      if (!isTrustedUserEvent(event)) return;
       setCollapsedState(true);
     });
 
-    dropdown.querySelector('[data-action="disable"]')?.addEventListener('click', () => {
+    dropdown.querySelector('[data-action="disable"]')?.addEventListener('click', (event) => {
+      if (!isTrustedUserEvent(event)) return;
       setEnabled(false);
       disconnectWidget();
     });
@@ -483,7 +497,8 @@
   }
 
   if (api?.runtime?.onMessage) {
-    api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (sender?.id && sender.id !== api.runtime.id) return false;
       if (message?.type !== 'youwee:open-deep-link') return false;
 
       const options = {
@@ -500,6 +515,10 @@
       try {
         const targetUrl =
           typeof message.url === 'string' && message.url ? message.url : location.href;
+        if (!ext.parseHttpUrl(targetUrl)) {
+          sendResponse?.({ ok: false, error: 'Invalid URL' });
+          return false;
+        }
         ext.openDeepLink(targetUrl, undefined, options);
         sendResponse?.({ ok: true });
       } catch (error) {

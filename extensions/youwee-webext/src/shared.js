@@ -297,13 +297,27 @@
   }
 
   function getExtensionApi() {
-    return globalThis.browser || globalThis.chrome || null;
+    try {
+      const api = globalThis.browser || globalThis.chrome || null;
+      if (!api) return null;
+      // Accessing runtime.id throws when extension context is invalidated.
+      if (api.runtime && typeof api.runtime.id === 'string') {
+        return api;
+      }
+      return api;
+    } catch {
+      return null;
+    }
   }
 
   function t(key, fallback) {
-    const api = getExtensionApi();
-    const value = api?.i18n?.getMessage?.(key);
-    return value || fallback || key;
+    try {
+      const api = getExtensionApi();
+      const value = api?.i18n?.getMessage?.(key);
+      return value || fallback || key;
+    } catch {
+      return fallback || key;
+    }
   }
 
   globalThis.YouweeExt = {

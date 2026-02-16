@@ -64,6 +64,7 @@
 ![Youwee - Language Vote](docs/screenshots/youwee-15.png)
 ![Youwee - Subtitle Workshop](docs/screenshots/youwee-16.png)
 ![Youwee - Subtitle Timeline & QC](docs/screenshots/youwee-17.png)
+![Youwee - Browser Extension](docs/screenshots/youwee-18.png)
 
 </details>
 

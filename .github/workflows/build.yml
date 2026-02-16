@@ -256,8 +256,8 @@ jobs:
         with:
           name: youwee-extension-packages
           path: |
-            extensions/youwee-webext/dist/packages/*.zip
-            extensions/youwee-webext/dist/packages/*.xpi
+            extensions/youwee-webext/dist/packages/Youwee-Extension-Chromium.zip
+            extensions/youwee-webext/dist/packages/Youwee-Extension-Firefox-signed.xpi
           if-no-files-found: error
 
   # Create release after all builds complete

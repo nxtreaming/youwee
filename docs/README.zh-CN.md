@@ -62,6 +62,7 @@
 ![Youwee - 语言投票](screenshots/youwee-15.png)
 ![Youwee - 字幕工坊](screenshots/youwee-16.png)
 ![Youwee - 字幕时间轴与质检](screenshots/youwee-17.png)
+![Youwee - Browser Extension](docs/screenshots/youwee-18.png)
 
 </details>
 

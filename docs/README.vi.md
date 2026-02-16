@@ -62,6 +62,7 @@
 ![Youwee - Bình chọn ngôn ngữ](screenshots/youwee-15.png)
 ![Youwee - Xưởng phụ đề](screenshots/youwee-16.png)
 ![Youwee - Timeline & QC phụ đề](screenshots/youwee-17.png)
+![Youwee - Extension cho trình duyệt](docs/screenshots/youwee-18.png)
 
 </details>
 
