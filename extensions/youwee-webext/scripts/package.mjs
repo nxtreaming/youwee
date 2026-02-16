@@ -31,20 +31,16 @@ async function zipDirectory(sourceDir, outputFile) {
 
 async function run() {
   const chromiumDir = path.join(distDir, 'chromium');
-  const firefoxDir = path.join(distDir, 'firefox');
 
   await rm(packagesDir, { recursive: true, force: true });
   await mkdir(packagesDir, { recursive: true });
 
   const chromiumZip = path.join(packagesDir, 'Youwee-Extension-Chromium.zip');
-  const firefoxUnsignedZip = path.join(packagesDir, 'Youwee-Extension-Firefox-unsigned.zip');
 
   await zipDirectory(chromiumDir, chromiumZip);
-  await zipDirectory(firefoxDir, firefoxUnsignedZip);
 
   console.log('Packaged extension archives:');
   console.log(`- ${chromiumZip}`);
-  console.log(`- ${firefoxUnsignedZip}`);
 }
 
 run().catch((error) => {

@@ -14,6 +14,64 @@ export interface ExternalLinkRequest {
   source: string | null;
 }
 
+const MAX_EXTERNAL_DEEPLINK_LENGTH = 4096;
+const TRUSTED_EXTERNAL_SOURCES = new Set(['ext-chromium', 'ext-firefox']);
+
+function normalizeExternalSource(source: string | null): string | null {
+  const normalized = source?.trim().toLowerCase();
+  if (!normalized) return null;
+  return TRUSTED_EXTERNAL_SOURCES.has(normalized) ? normalized : null;
+}
+
+export function isTrustedExternalSource(source: string | null): boolean {
+  return !!source && TRUSTED_EXTERNAL_SOURCES.has(source);
+}
+
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  if (!host) return true;
+
+  if (
+    host === 'localhost' ||
+    host === '0.0.0.0' ||
+    host === '::' ||
+    host === '::1' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal')
+  ) {
+    return true;
+  }
+
+  if (
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^169\.254\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+  ) {
+    return true;
+  }
+
+  if (host.includes(':')) {
+    return host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd');
+  }
+
+  return false;
+}
+
+function isPublicHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    return !isPrivateOrLocalHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function parseEnqueueOptions(parsed: URL): ExternalEnqueueOptions {
   const media = parsed.searchParams.get('media') === 'audio' ? 'audio' : 'video';
   const qualityParam = parsed.searchParams.get('quality') || '';
@@ -84,6 +142,10 @@ export function normalizeExternalVideoUrl(url: string): string {
 }
 
 export function parseExternalDeepLink(raw: string): ExternalLinkRequest | null {
+  if (!raw || raw.length > MAX_EXTERNAL_DEEPLINK_LENGTH) {
+    return null;
+  }
+
   let parsed: URL;
   try {
     parsed = new URL(raw);
@@ -105,7 +167,7 @@ export function parseExternalDeepLink(raw: string): ExternalLinkRequest | null {
   }
 
   const normalizedUrl = normalizeExternalVideoUrl(urlParam);
-  if (!isSafeUrl(normalizedUrl)) {
+  if (!isSafeUrl(normalizedUrl) || !isPublicHttpUrl(normalizedUrl)) {
     return null;
   }
 
@@ -122,7 +184,7 @@ export function parseExternalDeepLink(raw: string): ExternalLinkRequest | null {
     target,
     action,
     enqueueOptions: parseEnqueueOptions(parsed),
-    source: parsed.searchParams.get('source'),
+    source: normalizeExternalSource(parsed.searchParams.get('source')),
   };
 }
 

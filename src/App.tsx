@@ -8,6 +8,7 @@ import { MeteorTransition } from '@/components/effects/MeteorTransition';
 import { FFmpegDialog } from '@/components/FFmpegDialog';
 import type { Page } from '@/components/layout';
 import { MainLayout } from '@/components/layout';
+import type { SettingsSectionId } from '@/components/settings';
 import { UpdateDialog } from '@/components/UpdateDialog';
 import { AIProvider } from '@/contexts/AIContext';
 import { ChannelsProvider } from '@/contexts/ChannelsContext';
@@ -21,7 +22,11 @@ import { SubtitleProvider } from '@/contexts/SubtitleContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { UniversalProvider, useUniversal } from '@/contexts/UniversalContext';
 import { UpdaterProvider, useUpdater } from '@/contexts/UpdaterContext';
-import { parseExternalDeepLink, resolveExternalRouteTarget } from '@/lib/external-link';
+import {
+  isTrustedExternalSource,
+  parseExternalDeepLink,
+  resolveExternalRouteTarget,
+} from '@/lib/external-link';
 import {
   ChannelsPage,
   DownloadPage,
@@ -37,6 +42,8 @@ import {
 
 function AppContent() {
   const [currentPage, setCurrentPage] = useState<Page>('youtube');
+  const [settingsInitialSection, setSettingsInitialSection] =
+    useState<SettingsSectionId>('general');
   const [showFfmpegDialog, setShowFfmpegDialog] = useState(false);
   const [showDenoDialog, setShowDenoDialog] = useState(false);
   const [ffmpegChecked, setFfmpegChecked] = useState(false);
@@ -48,6 +55,8 @@ function AppContent() {
   const { isTransitioning, oldMode, applyPendingTheme, onTransitionComplete } = useTheme();
   const externalDedupRef = useRef<Map<string, number>>(new Map());
   const externalStartLockRef = useRef({ youtube: false, universal: false });
+  const externalRequestRateRef = useRef<number[]>([]);
+  const externalApprovalCacheRef = useRef<Map<string, number>>(new Map());
 
   // Show FFmpeg dialog on startup if not installed
   useEffect(() => {
@@ -103,6 +112,7 @@ function AppContent() {
   useEffect(() => {
     const unlisten = listen('tray-check-update', () => {
       setCurrentPage('settings');
+      setSettingsInitialSection('about');
       void updater.checkForUpdate();
     });
 
@@ -115,6 +125,19 @@ function AppContent() {
   useEffect(() => {
     const unlisten = listen('tray-open-settings', () => {
       setCurrentPage('settings');
+      setSettingsInitialSection('general');
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // Open extension section from system tray action
+  useEffect(() => {
+    const unlisten = listen('tray-open-extension', () => {
+      setCurrentPage('settings');
+      setSettingsInitialSection('extension');
     });
 
     return () => {
@@ -139,8 +162,16 @@ function AppContent() {
       const parsed = parseExternalDeepLink(rawLink);
       if (!parsed) return;
 
-      const dedupeKey = `${parsed.action}:${parsed.target}:${parsed.url}:${parsed.enqueueOptions.mediaType ?? 'video'}:${parsed.enqueueOptions.quality ?? 'best'}:${parsed.enqueueOptions.audioBitrate ?? 'auto'}`;
       const now = Date.now();
+      externalRequestRateRef.current = externalRequestRateRef.current.filter(
+        (timestamp) => now - timestamp < 60_000,
+      );
+      if (externalRequestRateRef.current.length >= 20) {
+        return;
+      }
+      externalRequestRateRef.current.push(now);
+
+      const dedupeKey = `${parsed.action}:${parsed.target}:${parsed.url}:${parsed.enqueueOptions.mediaType ?? 'video'}:${parsed.enqueueOptions.quality ?? 'best'}:${parsed.enqueueOptions.audioBitrate ?? 'auto'}`;
       const lastSeen = externalDedupRef.current.get(dedupeKey);
       if (lastSeen && now - lastSeen < 1500) {
         return;
@@ -153,16 +184,38 @@ function AppContent() {
         }
       }
 
+      let allowAutoStart = parsed.action === 'download_now';
+      if (allowAutoStart) {
+        const host = (() => {
+          try {
+            return new URL(parsed.url).hostname;
+          } catch {
+            return 'this page';
+          }
+        })();
+        const approvalKey = `${host}:${parsed.source ?? 'unknown'}`;
+        const approvedUntil = externalApprovalCacheRef.current.get(approvalKey) ?? 0;
+        if (approvedUntil <= now) {
+          const sourceLabel = isTrustedExternalSource(parsed.source)
+            ? parsed.source
+            : 'unknown source';
+          const confirmed = window.confirm(
+            `External request from ${sourceLabel} wants to start downloading immediately for ${host}.\n\nPress OK to start now, or Cancel to only add this item to queue.`,
+          );
+          if (!confirmed) {
+            allowAutoStart = false;
+          } else {
+            externalApprovalCacheRef.current.set(approvalKey, now + 30_000);
+          }
+        }
+      }
+
       const routeTarget = resolveExternalRouteTarget(parsed.target, parsed.url);
       if (routeTarget === 'youtube') {
         setCurrentPage('youtube');
         await download.enqueueExternalUrl(parsed.url, parsed.enqueueOptions);
 
-        if (
-          parsed.action === 'download_now' &&
-          !download.isDownloading &&
-          !externalStartLockRef.current.youtube
-        ) {
+        if (allowAutoStart && !download.isDownloading && !externalStartLockRef.current.youtube) {
           externalStartLockRef.current.youtube = true;
           try {
             await download.startDownload();
@@ -176,11 +229,7 @@ function AppContent() {
       setCurrentPage('universal');
       await universal.enqueueExternalUrl(parsed.url, parsed.enqueueOptions);
 
-      if (
-        parsed.action === 'download_now' &&
-        !universal.isDownloading &&
-        !externalStartLockRef.current.universal
-      ) {
+      if (allowAutoStart && !universal.isDownloading && !externalStartLockRef.current.universal) {
         externalStartLockRef.current.universal = true;
         try {
           await universal.startDownload();
@@ -280,7 +329,7 @@ function AppContent() {
         {currentPage === 'subtitles' && <SubtitlesPage />}
         {currentPage === 'library' && <HistoryPage />}
         {currentPage === 'logs' && <LogsPage />}
-        {currentPage === 'settings' && <SettingsPage />}
+        {currentPage === 'settings' && <SettingsPage initialSection={settingsInitialSection} />}
       </MainLayout>
 
       <UpdateDialog
