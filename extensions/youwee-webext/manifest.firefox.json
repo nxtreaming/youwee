@@ -23,24 +23,7 @@
   "web_accessible_resources": [
     {
       "resources": ["icons/*"],
-      "matches": [
-        "*://*.youtube.com/*",
-        "*://youtu.be/*",
-        "*://*.tiktok.com/*",
-        "*://*.instagram.com/*",
-        "*://*.facebook.com/*",
-        "*://fb.watch/*",
-        "*://*.x.com/*",
-        "*://*.twitter.com/*",
-        "*://*.vimeo.com/*",
-        "*://*.twitch.tv/*",
-        "*://clips.twitch.tv/*",
-        "*://*.bilibili.com/*",
-        "*://b23.tv/*",
-        "*://*.dailymotion.com/*",
-        "*://dai.ly/*",
-        "*://*.soundcloud.com/*"
-      ]
+      "matches": ["<all_urls>"]
     }
   ],
   "host_permissions": [
