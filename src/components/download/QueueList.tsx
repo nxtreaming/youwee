@@ -1,4 +1,5 @@
 import { CheckCircle2, Trash2, Youtube } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { QueueItem } from './QueueItem';
 
 interface QueueListProps {
   items: DownloadItem[];
+  focusedItemId?: string | null;
   isDownloading: boolean;
   showPlaylistBadge?: boolean;
   currentPlaylistInfo?: {
@@ -22,6 +24,7 @@ interface QueueListProps {
 
 export function QueueList({
   items,
+  focusedItemId,
   isDownloading,
   showPlaylistBadge,
   currentPlaylistInfo,
@@ -30,18 +33,31 @@ export function QueueList({
   onClearCompleted,
 }: QueueListProps) {
   const { t } = useTranslation('download');
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const completedCount = items.filter((i) => i.status === 'completed').length;
   const pendingCount = items.filter((i) => i.status === 'pending').length;
   const totalCount = items.length;
+  const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  useEffect(() => {
+    if (!focusedItemId || !containerRef.current) return;
+    const target = containerRef.current.querySelector<HTMLElement>(
+      `[data-queue-item-id="${focusedItemId}"]`,
+    );
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusedItemId]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div ref={containerRef} className="flex-1 flex flex-col min-h-0">
       {/* Header */}
       {totalCount > 0 && (
-        <div className="flex items-center justify-between py-2 px-1 gap-2">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-lg bg-background/80 px-1 py-2 backdrop-blur-sm">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-medium">{t('queue.title')}</h2>
             <div className="flex items-center gap-1.5">
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                {completedCount}/{totalCount}
+              </Badge>
               {pendingCount > 0 && (
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                   {t('queue.pending', { count: pendingCount })}
@@ -62,6 +78,11 @@ export function QueueList({
                   className="text-[10px] px-1.5 py-0 text-primary border-primary/30"
                 >
                   {currentPlaylistInfo.index}/{currentPlaylistInfo.total}
+                </Badge>
+              )}
+              {completedCount > 0 && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
+                  {completionRate}%
                 </Badge>
               )}
             </div>
@@ -100,6 +121,7 @@ export function QueueList({
               <QueueItem
                 key={item.id}
                 item={item}
+                isFocused={focusedItemId === item.id}
                 showPlaylistBadge={showPlaylistBadge}
                 disabled={isDownloading}
                 onRemove={onRemove}

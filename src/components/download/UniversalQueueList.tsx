@@ -1,5 +1,7 @@
 import { CheckCircle2, ExternalLink, Inbox } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { DownloadItem } from '@/lib/types';
@@ -22,6 +24,7 @@ const POPULAR_SITES = [
 
 interface UniversalQueueListProps {
   items: DownloadItem[];
+  focusedItemId?: string | null;
   isDownloading: boolean;
   onRemove: (id: string) => void;
   onUpdateTimeRange: (id: string, start?: string, end?: string) => void;
@@ -30,14 +33,27 @@ interface UniversalQueueListProps {
 
 export function UniversalQueueList({
   items,
+  focusedItemId,
   isDownloading,
   onRemove,
   onUpdateTimeRange,
   onClearCompleted,
 }: UniversalQueueListProps) {
   const { t } = useTranslation('universal');
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const completedCount = items.filter((i) => i.status === 'completed').length;
+  const pendingCount = items.filter((i) => i.status === 'pending').length;
+  const totalCount = items.length;
   const hasCompleted = completedCount > 0;
+  const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  useEffect(() => {
+    if (!focusedItemId || !containerRef.current) return;
+    const target = containerRef.current.querySelector<HTMLElement>(
+      `[data-queue-item-id="${focusedItemId}"]`,
+    );
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusedItemId]);
 
   if (items.length === 0) {
     return (
@@ -85,19 +101,30 @@ export function UniversalQueueList({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div ref={containerRef} className="flex-1 flex flex-col overflow-hidden">
       {/* Queue Header */}
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-muted-foreground">
-          {items.length === 1
-            ? t('queue.videosInQueue', { count: items.length })
-            : t('queue.videosInQueue_plural', { count: items.length })}
-        </span>
+      <div className="sticky top-0 z-10 mb-2 flex items-center justify-between gap-2 rounded-lg bg-background/80 px-1 py-2 backdrop-blur-sm">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">{t('queue.title')}</span>
+          <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+            {completedCount}/{totalCount}
+          </Badge>
+          {pendingCount > 0 && (
+            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+              {t('queue.pending', { count: pendingCount })}
+            </Badge>
+          )}
+          {hasCompleted && (
+            <Badge variant="outline" className="px-1.5 py-0 text-[10px] text-muted-foreground">
+              {completionRate}%
+            </Badge>
+          )}
+        </div>
         {hasCompleted && (
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1"
+            className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
             onClick={onClearCompleted}
             disabled={isDownloading}
           >
@@ -114,6 +141,7 @@ export function UniversalQueueList({
             <UniversalQueueItem
               key={item.id}
               item={item}
+              isFocused={focusedItemId === item.id}
               disabled={isDownloading}
               onRemove={onRemove}
               onUpdateTimeRange={onUpdateTimeRange}

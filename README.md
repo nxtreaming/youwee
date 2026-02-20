@@ -22,7 +22,8 @@
 
 ## Features
 
-- **Video Downloads** — YouTube, TikTok, Facebook, Instagram, and 1800+ sites
+- **Video Downloads** — YouTube, TikTok, Facebook, Instagram, Bilibili, Youku, and 1800+ sites
+- **Browser Extension Bridge** — Chromium + Firefox extension with floating button, media/quality picker, and one-click `Download now` / `Add to queue` send to Youwee app
 - **Channel Follow** — Follow YouTube, Bilibili & Youku channels, get notified of new videos, auto-download, and manage from system tray
 - **Metadata Fetcher** — Download video info, descriptions, comments, and thumbnails without the video
 - **Live Stream Support** — Download live streams with dedicated toggle
@@ -63,6 +64,7 @@
 ![Youwee - Language Vote](docs/screenshots/youwee-15.png)
 ![Youwee - Subtitle Workshop](docs/screenshots/youwee-16.png)
 ![Youwee - Subtitle Timeline & QC](docs/screenshots/youwee-17.png)
+![Youwee - Browser Extension](docs/screenshots/youwee-18.png)
 
 </details>
 
@@ -88,6 +90,18 @@
 | **Linux** (x64) | [Download .deb](https://github.com/vanloctech/youwee/releases/latest/download/Youwee-Linux.deb) · [Download .AppImage](https://github.com/vanloctech/youwee/releases/latest/download/Youwee-Linux.AppImage) (Recommend for auto update) |
 
 > See all releases on the [Releases page](https://github.com/vanloctech/youwee/releases)
+
+### Browser Extension (Chromium + Firefox)
+
+| Browser | Download |
+|---------|----------|
+| **Chromium** (Chrome/Edge/Brave/Opera/Vivaldi/Arc/Coc Coc) | [Download .zip](https://github.com/vanloctech/youwee/releases/latest/download/Youwee-Extension-Chromium.zip) |
+| **Firefox** | [Download .xpi](https://github.com/vanloctech/youwee/releases/latest/download/Youwee-Extension-Firefox-signed.xpi) |
+
+- One-click send current page to Youwee with `Download now` or `Add to queue`
+- Floating button supports `Video/Audio` + quality selection on supported sites
+- Popup works on any valid HTTP/HTTPS tab
+- Guide: [docs/browser-extension.md](docs/browser-extension.md)
 
 ### Build from Source
 
@@ -123,11 +137,7 @@ bun run tauri build
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
-
-- Getting started with development
-- Commit conventions
-- Pull request guidelines
+We welcome contributions. See [Contributing Guide](CONTRIBUTING.md).
 
 ## License
 

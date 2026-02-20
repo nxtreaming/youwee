@@ -71,6 +71,18 @@ fn update_tray_schedule(app: tauri::AppHandle, status: String) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            let links = commands::extract_external_links_from_argv(&argv);
+            if !links.is_empty() {
+                commands::enqueue_external_links(links.clone());
+                let _ = app.emit(
+                    "external-open-url",
+                    commands::ExternalOpenUrlEventPayload { urls: links },
+                );
+            }
+            show_main_window(app);
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
@@ -79,6 +91,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            // Queue deep links from cold-start arguments so frontend can consume on mount.
+            let argv: Vec<String> = std::env::args().collect();
+            let initial_links = commands::extract_external_links_from_argv(&argv);
+            if !initial_links.is_empty() {
+                commands::enqueue_external_links(initial_links);
+            }
+
             // Initialize the database
             if let Err(e) = database::init_database(&app.handle()) {
                 log::error!("Failed to initialize database: {}", e);
@@ -212,6 +231,8 @@ pub fn run() {
             commands::update_channel_last_checked,
             commands::update_channel_info,
             commands::set_polling_network_config,
+            // External deep-link commands
+            commands::consume_pending_external_links,
             // System commands
             set_hide_dock_on_close,
             rebuild_tray_menu_cmd,
@@ -284,6 +305,10 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     "show" => {
                         show_main_window(&app_handle_menu);
                     }
+                    "browser_extension" => {
+                        show_main_window(&app_handle_menu);
+                        let _ = app_handle_menu.emit("tray-open-extension", ());
+                    }
                     "quit" => {
                         services::polling::stop_polling();
                         app_handle_menu.exit(0);
@@ -333,6 +358,7 @@ fn tray_text(key: &str) -> &'static str {
         ("vi", "settings") => "Cài đặt",
         ("vi", "check_update") => "Kiểm tra cập nhật...",
         ("vi", "open") => "Mở Youwee",
+        ("vi", "browser_extension") => "Browser Extension",
         ("vi", "quit") => "Thoát",
         // Chinese
         ("zh-CN", "followed_channels") => "已关注的频道",
@@ -342,6 +368,7 @@ fn tray_text(key: &str) -> &'static str {
         ("zh-CN", "settings") => "设置",
         ("zh-CN", "check_update") => "检查更新...",
         ("zh-CN", "open") => "打开 Youwee",
+        ("zh-CN", "browser_extension") => "浏览器扩展",
         ("zh-CN", "quit") => "退出",
         // English (default)
         (_, "followed_channels") => "Followed Channels",
@@ -351,6 +378,7 @@ fn tray_text(key: &str) -> &'static str {
         (_, "settings") => "Settings",
         (_, "check_update") => "Check for Updates...",
         (_, "open") => "Open Youwee",
+        (_, "browser_extension") => "Browser Extension",
         (_, "quit") => "Quit",
         _ => "???",
     }
@@ -390,6 +418,7 @@ fn rebuild_tray_menu_inner(app_handle: &tauri::AppHandle) -> Result<(), Box<dyn 
     let settings = MenuItemBuilder::with_id("settings", tray_text("settings")).build(app_handle)?;
     let check_update = MenuItemBuilder::with_id("check_update", tray_text("check_update")).build(app_handle)?;
     let show = MenuItemBuilder::with_id("show", tray_text("open")).build(app_handle)?;
+    let browser_extension = MenuItemBuilder::with_id("browser_extension", tray_text("browser_extension")).build(app_handle)?;
     let quit = MenuItemBuilder::with_id("quit", tray_text("quit")).build(app_handle)?;
 
     let menu = MenuBuilder::new(app_handle)
@@ -398,6 +427,7 @@ fn rebuild_tray_menu_inner(app_handle: &tauri::AppHandle) -> Result<(), Box<dyn 
         .separator()
         .item(&settings)
         .item(&show)
+        .item(&browser_extension)
         .separator()
         .item(&check_update)
         .separator()
