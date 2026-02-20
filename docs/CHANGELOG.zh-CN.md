@@ -12,6 +12,7 @@ Youwee 的所有重要更改都将记录在此文件中。
 - **设置中新增 Extension 安装入口** - 在 设置 → Extension 新增专属区域，提供直接下载按钮和简单安装步骤（Chromium / Firefox）
 
 ### 变更
+- **YouTube 与 Universal 页面 UI/UX 更新** - 统一并简化链接输入、预览卡片、队列与标题栏交互，整体体验更清晰一致
 
 ### 修复
 
