@@ -350,33 +350,14 @@ export function AIProvider({ children }: { children: ReactNode }) {
         return newMap;
       });
 
-      // Get languages from current config
-      const languages = config.transcript_languages || ['en'];
-
-      // Get cookie settings
-      const cookieSettings = loadCookieSettings();
-
-      // Get proxy settings
-      const proxySettings = loadProxySettings();
-
       // Run in background (not awaited, fire-and-forget)
       (async () => {
         try {
           // Fetch transcript
           if (import.meta.env.DEV) {
-            console.log(
-              `[AI] Fetching transcript for URL: ${url}, languages: ${languages.join(', ')}`,
-            );
+            console.log(`[AI] Fetching transcript for URL with fallback chain: ${url}`);
           }
-          const transcript = await invoke<string>('get_video_transcript', {
-            url,
-            languages,
-            cookieMode: cookieSettings.mode,
-            cookieBrowser: cookieSettings.browser || null,
-            cookieBrowserProfile: cookieSettings.browserProfile || null,
-            cookieFilePath: cookieSettings.filePath || null,
-            proxyUrl: buildProxyUrl(proxySettings) || null,
-          });
+          const transcript = await fetchTranscript(url);
 
           if (import.meta.env.DEV) {
             console.log(
@@ -413,7 +394,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
         }
       })();
     },
-    [updateTask, config.transcript_languages, config.enabled],
+    [updateTask, config.enabled, fetchTranscript],
   );
 
   const getSummaryTask = useCallback(
@@ -468,27 +449,11 @@ export function AIProvider({ children }: { children: ReactNode }) {
         return newMap;
       });
 
-      const languages = config.transcript_languages || ['en'];
-
-      // Get cookie settings
-      const cookieSettings = loadCookieSettings();
-
-      // Get proxy settings
-      const proxySettings = loadProxySettings();
-
       // Run in background
       (async () => {
         try {
           // Fetch transcript
-          const transcript = await invoke<string>('get_video_transcript', {
-            url: itemInfo.url,
-            languages,
-            cookieMode: cookieSettings.mode,
-            cookieBrowser: cookieSettings.browser || null,
-            cookieBrowserProfile: cookieSettings.browserProfile || null,
-            cookieFilePath: cookieSettings.filePath || null,
-            proxyUrl: buildProxyUrl(proxySettings) || null,
-          });
+          const transcript = await fetchTranscript(itemInfo.url);
 
           // Update to generating status
           updateTask(taskId, { status: 'generating' });
@@ -525,7 +490,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
         }
       })();
     },
-    [updateTask, config.transcript_languages, config.enabled],
+    [updateTask, config.enabled, fetchTranscript],
   );
 
   return (
