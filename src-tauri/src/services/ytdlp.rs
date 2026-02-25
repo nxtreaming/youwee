@@ -306,6 +306,27 @@ pub async fn run_ytdlp_with_stderr(app: &AppHandle, args: &[&str]) -> Result<Ytd
 /// Parse yt-dlp stderr for common errors and return user-friendly message
 pub fn parse_ytdlp_error(stderr: &str) -> Option<String> {
     let stderr_lower = stderr.to_lowercase();
+
+    // Browser cookie database locked / unavailable
+    if stderr_lower.contains("could not copy")
+        && stderr_lower.contains("cookie")
+        && stderr_lower.contains("database")
+    {
+        return Some(
+            "Browser cookie database is locked. Please close browser windows and retry, or switch to Cookie File mode in Settings → Network."
+                .to_string(),
+        );
+    }
+
+    // Douyin / TikTok fresh cookies requirement
+    if stderr_lower.contains("fresh cookies")
+        || (stderr_lower.contains("douyin") && stderr_lower.contains("cookies") && stderr_lower.contains("needed"))
+    {
+        return Some(
+            "This Douyin/TikTok content requires fresh login cookies. Please refresh login in browser cookie mode, then retry."
+                .to_string(),
+        );
+    }
     
     // Rate limiting
     if stderr_lower.contains("429") || stderr_lower.contains("too many requests") {

@@ -12,6 +12,26 @@ use crate::utils::validate_url;
 use crate::utils::CommandExt;
 use crate::database::add_log_internal;
 
+fn default_transcript_languages(url: &str) -> Vec<String> {
+    let lowered = url.to_lowercase();
+    if lowered.contains("douyin.com")
+        || lowered.contains("iesdouyin.com")
+        || lowered.contains("bilibili.com")
+        || lowered.contains("b23.tv")
+    {
+        return vec![
+            "zh-Hans".to_string(),
+            "zh-CN".to_string(),
+            "zh".to_string(),
+            "en".to_string(),
+        ];
+    }
+    if lowered.contains("tiktok.com") {
+        return vec!["en".to_string()];
+    }
+    vec!["en".to_string()]
+}
+
 /// Get video transcript/subtitles for AI summarization
 #[tauri::command]
 pub async fn get_video_transcript(
@@ -50,9 +70,7 @@ pub async fn get_video_transcript(
     let url_for_info = url.clone();
     
     // Use provided languages or default
-    let lang_list: Vec<String> = languages.unwrap_or_else(|| {
-        vec!["en".to_string()]
-    });
+    let lang_list: Vec<String> = languages.unwrap_or_else(|| default_transcript_languages(&url));
     
     #[cfg(debug_assertions)]
     println!("[TRANSCRIPT] Languages to try: {:?}", lang_list);
@@ -282,6 +300,8 @@ pub async fn get_video_transcript(
                     
                     add_log_internal("info", "Description not relevant (promotional content only)", None, Some(&url)).ok();
                 }
+            } else {
+                add_log_internal("info", "Description fallback returned too little content", None, Some(&url)).ok();
             }
         }
         Ok(Err(e)) => {
@@ -293,6 +313,50 @@ pub async fn get_video_transcript(
             #[cfg(debug_assertions)]
             println!("[TRANSCRIPT] Description fetch timed out");
             add_log_internal("stderr", "Description fetch timed out (45s)", None, Some(&url)).ok();
+        }
+    }
+
+    // Fallback #2: metadata extraction from dump-json (useful for Douyin/TikTok when subtitles are unavailable)
+    if !rate_limited {
+        let metadata_args = vec![
+            "--dump-json",
+            "--no-download",
+            "--no-playlist",
+            "--no-warnings",
+            "--no-cache-dir",
+            "--socket-timeout",
+            "30",
+            "--",
+            &url_for_info,
+        ];
+        let metadata_result = timeout(
+            Duration::from_secs(45),
+            run_ytdlp_json_with_cookies(
+                &app,
+                &metadata_args.iter().copied().collect::<Vec<_>>(),
+                cookie_mode.as_deref(),
+                cookie_browser.as_deref(),
+                cookie_browser_profile.as_deref(),
+                cookie_file_path.as_deref(),
+                proxy_url.as_deref(),
+            ),
+        )
+        .await;
+        match metadata_result {
+            Ok(Ok(json_output)) => {
+                if let Ok(info_json) = serde_json::from_str::<serde_json::Value>(&json_output) {
+                    if let Some(text) = build_metadata_fallback_from_info_json(&info_json) {
+                        add_log_internal("success", "Using metadata fallback content", None, Some(&url)).ok();
+                        return Ok(text);
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                add_log_internal("stderr", &format!("Metadata fallback failed: {}", e), None, Some(&url)).ok();
+            }
+            Err(_) => {
+                add_log_internal("stderr", "Metadata fallback timed out (45s)", None, Some(&url)).ok();
+            }
         }
     }
     
@@ -390,6 +454,75 @@ fn is_description_content_relevant(title: &str, description: &str) -> bool {
     
     // Default to true if we have enough text content
     text_without_links.split_whitespace().count() > 50
+}
+
+fn build_metadata_fallback_from_info_json(json: &serde_json::Value) -> Option<String> {
+    let title = json
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    let description = json
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+
+    if !title.is_empty() && !description.is_empty() && description.len() > 50 && is_description_content_relevant(title, description) {
+        return Some(format!("[Video Description - No subtitles available]\nTitle: {}\n\n{}", title, description));
+    }
+
+    let uploader = json
+        .get("uploader")
+        .and_then(|v| v.as_str())
+        .or_else(|| json.get("channel").and_then(|v| v.as_str()))
+        .unwrap_or("")
+        .trim();
+    let upload_date = json.get("upload_date").and_then(|v| v.as_str()).unwrap_or("").trim();
+    let duration = json.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let view_count = json.get("view_count").and_then(|v| v.as_u64()).unwrap_or(0);
+    let like_count = json.get("like_count").and_then(|v| v.as_u64()).unwrap_or(0);
+    let comment_count = json.get("comment_count").and_then(|v| v.as_u64()).unwrap_or(0);
+    let repost_count = json.get("repost_count").and_then(|v| v.as_u64()).unwrap_or(0);
+    let webpage_url = json.get("webpage_url").and_then(|v| v.as_str()).unwrap_or("").trim();
+
+    let mut lines: Vec<String> = Vec::new();
+    if !title.is_empty() {
+        lines.push(format!("Title: {}", title));
+    }
+    if !uploader.is_empty() {
+        lines.push(format!("Uploader: {}", uploader));
+    }
+    if !upload_date.is_empty() {
+        lines.push(format!("Upload date: {}", upload_date));
+    }
+    if duration > 0.0 {
+        lines.push(format!("Duration: {:.0}s", duration));
+    }
+    if view_count > 0 {
+        lines.push(format!("Views: {}", view_count));
+    }
+    if like_count > 0 {
+        lines.push(format!("Likes: {}", like_count));
+    }
+    if comment_count > 0 {
+        lines.push(format!("Comments: {}", comment_count));
+    }
+    if repost_count > 0 {
+        lines.push(format!("Shares/Reposts: {}", repost_count));
+    }
+    if !webpage_url.is_empty() {
+        lines.push(format!("Source URL: {}", webpage_url));
+    }
+
+    if lines.len() < 2 {
+        return None;
+    }
+
+    Some(format!(
+        "[Video Metadata - No subtitles available]\n{}",
+        lines.join("\n")
+    ))
 }
 
 /// Parse VTT or SRT subtitle file to plain text
