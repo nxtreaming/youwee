@@ -16,7 +16,6 @@ fn default_transcript_languages(url: &str) -> Vec<String> {
     let lowered = url.to_lowercase();
     if lowered.contains("douyin.com")
         || lowered.contains("iesdouyin.com")
-        || lowered.contains("tiktok.com")
         || lowered.contains("bilibili.com")
         || lowered.contains("b23.tv")
     {
@@ -26,6 +25,9 @@ fn default_transcript_languages(url: &str) -> Vec<String> {
             "zh".to_string(),
             "en".to_string(),
         ];
+    }
+    if lowered.contains("tiktok.com") {
+        return vec!["en".to_string()];
     }
     vec!["en".to_string()]
 }
