@@ -1031,6 +1031,14 @@ async fn handle_tokio_download(
         let _ = tokio::time::timeout(std::time::Duration::from_secs(5), task).await;
     }
 
+    // Wait for process to fully exit before reading the temp file.
+    // yt-dlp writes --print-to-file after_move:filepath near process exit;
+    // reading before wait() can race and miss the path.
+    let status = process
+        .wait()
+        .await
+        .map_err(|e| BackendError::from_message(format!("Process error: {}", e)).to_wire_string())?;
+
     // Primary filepath source: read from the --print-to-file temp file (UTF-8).
     // This is reliable on all platforms, especially Windows with non-UTF-8 locales
     // where stdout encoding (GBK) corrupts Unicode characters in file paths.
@@ -1051,11 +1059,6 @@ async fn handle_tokio_download(
             }
         }
     }
-
-    let status = process
-        .wait()
-        .await
-        .map_err(|e| BackendError::from_message(format!("Process error: {}", e)).to_wire_string())?;
 
     if status.success() {
         let actual_filesize = final_filepath.as_ref()
