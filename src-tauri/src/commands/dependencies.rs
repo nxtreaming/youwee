@@ -4,14 +4,15 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::process::Command;
 use tokio::io::AsyncWriteExt;
 use futures_util::StreamExt;
-use crate::types::{YtdlpVersionInfo, FfmpegStatus, DenoStatus, YtdlpChannel, YtdlpAllVersions, YtdlpChannelUpdateInfo};
+use crate::types::{BackendError, DependencySource, YtdlpVersionInfo, FfmpegStatus, DenoStatus, YtdlpChannel, YtdlpAllVersions, YtdlpChannelUpdateInfo};
 use crate::services::{
     get_ytdlp_version_internal, get_ytdlp_download_info, verify_sha256,
     check_ffmpeg_internal, get_ffmpeg_download_info, parse_ffmpeg_version,
     get_ffmpeg_path, check_ffmpeg_update_internal, FfmpegUpdateInfo,
     check_deno_internal, get_deno_download_url, check_deno_update_internal, DenoUpdateInfo,
-    get_ytdlp_channel, set_ytdlp_channel, get_all_ytdlp_versions,
-    get_ytdlp_channel_download_url, get_channel_api_url,
+    get_ytdlp_channel, set_ytdlp_channel, get_all_ytdlp_versions, get_ytdlp_source, set_ytdlp_source,
+    get_ytdlp_channel_download_url, get_channel_api_url, system_ytdlp_upgrade_message,
+    get_ffmpeg_source, set_ffmpeg_source, system_ffmpeg_upgrade_message,
 };
 use crate::utils::{extract_tar_gz, extract_tar_xz, extract_zip, extract_deno_zip, CommandExt};
 
@@ -88,6 +89,10 @@ pub async fn check_ytdlp_update() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn update_ytdlp(app: AppHandle) -> Result<String, String> {
+    if get_ytdlp_source(&app).await == DependencySource::System {
+        return Err(BackendError::new(crate::types::code::YTDLP_SYSTEM_MANAGED, system_ytdlp_upgrade_message()).with_retryable(false).to_wire_string());
+    }
+
     let (download_url, filename, checksum_filename) = get_ytdlp_download_info();
     
     let app_data_dir = app.path().app_data_dir()
@@ -182,6 +187,18 @@ pub async fn update_ytdlp(app: AppHandle) -> Result<String, String> {
 pub async fn get_ytdlp_channel_cmd(app: AppHandle) -> Result<String, String> {
     let channel = get_ytdlp_channel(&app).await;
     Ok(channel.as_str().to_string())
+}
+
+#[tauri::command]
+pub async fn get_ytdlp_source_cmd(app: AppHandle) -> Result<String, String> {
+    let source = get_ytdlp_source(&app).await;
+    Ok(source.as_str().to_string())
+}
+
+#[tauri::command]
+pub async fn set_ytdlp_source_cmd(app: AppHandle, source: String) -> Result<(), String> {
+    let source_enum = DependencySource::from_str(&source);
+    set_ytdlp_source(&app, &source_enum).await
 }
 
 #[tauri::command]
@@ -303,6 +320,10 @@ pub async fn check_ytdlp_channel_update(app: AppHandle, channel: String) -> Resu
 
 #[tauri::command]
 pub async fn download_ytdlp_channel(app: AppHandle, channel: String) -> Result<String, String> {
+    if get_ytdlp_source(&app).await == DependencySource::System {
+        return Err(BackendError::new(crate::types::code::YTDLP_SYSTEM_MANAGED, "System yt-dlp is managed externally. Switch source to App managed to install channel binaries.").with_retryable(false).to_wire_string());
+    }
+
     let channel_enum = YtdlpChannel::from_str(&channel);
     
     // Get download URL for the channel
@@ -421,12 +442,28 @@ pub async fn check_ffmpeg(app: AppHandle) -> Result<FfmpegStatus, String> {
 }
 
 #[tauri::command]
+pub async fn get_ffmpeg_source_cmd(app: AppHandle) -> Result<String, String> {
+    let source = get_ffmpeg_source(&app).await;
+    Ok(source.as_str().to_string())
+}
+
+#[tauri::command]
+pub async fn set_ffmpeg_source_cmd(app: AppHandle, source: String) -> Result<(), String> {
+    let source_enum = DependencySource::from_str(&source);
+    set_ffmpeg_source(&app, &source_enum).await
+}
+
+#[tauri::command]
 pub async fn check_ffmpeg_update(app: AppHandle) -> Result<FfmpegUpdateInfo, String> {
     check_ffmpeg_update_internal(&app).await
 }
 
 #[tauri::command]
 pub async fn download_ffmpeg(app: AppHandle) -> Result<String, String> {
+    if get_ffmpeg_source(&app).await == DependencySource::System {
+        return Err(BackendError::new(crate::types::code::FFMPEG_SYSTEM_MANAGED, system_ffmpeg_upgrade_message()).with_retryable(false).to_wire_string());
+    }
+
     let info = get_ffmpeg_download_info();
     
     if info.url.is_empty() {

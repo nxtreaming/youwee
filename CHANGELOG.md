@@ -8,8 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Dependency source selector (yt-dlp/FFmpeg)** - Added source switching in Settings → Dependencies so users can choose between app-managed binaries and system-managed binaries
+- **Safety confirmation before switching to system source** - Added a confirmation dialog when switching yt-dlp/FFmpeg to system source to prevent accidental changes
 
 ### Changed
+- **OS-aware system source label** - System source label now adapts by platform (`Homebrew` on macOS, `PATH` on Windows, package manager on Linux)
 
 ### Fixed
 
@@ -37,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **UI/UX refresh for YouTube and Universal pages** - Simplified input, preview, queue, and title-bar interactions for a cleaner and more consistent experience
 
 ### Fixed
+- **Consistent dependency resolution across features** - Unified yt-dlp/FFmpeg source handling in download, metadata, channels, and background polling so selected source is applied consistently
+- **Strict system-mode behavior** - When system source is selected and binary is missing, app now fails with a clear error instead of silently falling back
 
 ## [0.10.1] - 2026-02-15
 

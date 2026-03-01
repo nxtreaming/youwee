@@ -1,15 +1,10 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::process::Stdio;
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandEvent;
-use tokio::process::Command;
 
 use crate::database;
-use crate::services::{build_cookie_args, get_deno_path};
+use crate::services::{build_cookie_args, get_deno_path, run_ytdlp_with_stderr};
 use crate::types::{FollowedChannel, ChannelVideo};
-use crate::utils::CommandExt;
 
 /// Cookie/proxy configuration synced from the frontend for background polling.
 #[derive(Clone, Default)]
@@ -268,49 +263,11 @@ async fn check_channel_for_new_videos(
 
     let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-    let sidecar_result = app.shell().sidecar("yt-dlp");
-
-    let output = match sidecar_result {
-        Ok(sidecar) => {
-            let (mut rx, _child) = sidecar
-                .args(&args_ref)
-                .spawn()
-                .map_err(|e| format!("Failed to start yt-dlp: {}", e))?;
-
-            let mut output = String::new();
-
-            while let Some(event) = rx.recv().await {
-                match event {
-                    CommandEvent::Stdout(bytes) => {
-                        output.push_str(&String::from_utf8_lossy(&bytes));
-                    }
-                    CommandEvent::Stderr(_) => {}
-                    CommandEvent::Error(err) => {
-                        return Err(format!("Process error: {}", err));
-                    }
-                    CommandEvent::Terminated(status) => {
-                        if status.code != Some(0) && output.is_empty() {
-                            return Err("Failed to fetch channel videos".to_string());
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            output
-        }
-        Err(_) => {
-            let mut cmd = Command::new("yt-dlp");
-            cmd.args(&args)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            cmd.hide_window();
-            let result = cmd.output().await
-                .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
-
-            String::from_utf8_lossy(&result.stdout).to_string()
-        }
-    };
+    let output_result = run_ytdlp_with_stderr(app, &args_ref).await?;
+    if !output_result.success && output_result.stdout.is_empty() {
+        return Err("Failed to fetch channel videos".to_string());
+    }
+    let output = output_result.stdout;
 
     let mut new_videos: Vec<ChannelVideo> = Vec::new();
     let now = chrono::Utc::now().to_rfc3339();

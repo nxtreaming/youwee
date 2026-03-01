@@ -10,8 +10,14 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 use crate::database::{add_history_internal, add_log_internal};
-use crate::services::{get_deno_path, get_ffmpeg_path, get_ytdlp_path};
-use crate::types::BackendError;
+use crate::services::{
+    get_deno_path,
+    get_ffmpeg_path,
+    get_ytdlp_path,
+    get_ytdlp_source,
+    system_ytdlp_not_found_message,
+};
+use crate::types::{BackendError, DependencySource};
 use crate::utils::{sanitize_output_path, validate_url, CommandExt};
 
 pub static METADATA_CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
@@ -480,7 +486,12 @@ pub async fn fetch_metadata(
             Err(backend_err.to_wire_string())
         }
     } else {
-        add_log_internal("error", "yt-dlp not found", None, Some(&url)).ok();
-        Err(BackendError::from_message("yt-dlp not found").to_wire_string())
+        let err_msg = if get_ytdlp_source(&app).await == DependencySource::System {
+            system_ytdlp_not_found_message()
+        } else {
+            "yt-dlp not found".to_string()
+        };
+        add_log_internal("error", &err_msg, None, Some(&url)).ok();
+        Err(BackendError::from_message(&err_msg).to_wire_string())
     }
 }

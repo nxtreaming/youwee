@@ -1,138 +1,154 @@
+use std::collections::HashSet;
 use std::process::Stdio;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 use tokio::process::Command;
-use crate::types::FfmpegStatus;
+use crate::types::{DependencySource, FfmpegStatus};
 use crate::utils::CommandExt;
+
+const SOURCE_CONFIG_FILE: &str = "ffmpeg-source.txt";
+
+pub fn system_ffmpeg_upgrade_message() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        return "System FFmpeg is managed externally. Update it with Homebrew (`brew upgrade ffmpeg`) or switch source to App managed.".to_string();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return "System FFmpeg is managed externally. Update it with your package manager (e.g. `winget`, `choco`, or `scoop`) or switch source to App managed.".to_string();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return "System FFmpeg is managed externally. Update it with your distro package manager or switch source to App managed.".to_string();
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        "System FFmpeg is managed externally. Update it with your package manager or switch source to App managed.".to_string()
+    }
+}
+
+fn get_ffmpeg_source_config_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_data_dir().ok().map(|p| p.join("bin").join(SOURCE_CONFIG_FILE))
+}
+
+pub async fn get_ffmpeg_source(app: &AppHandle) -> DependencySource {
+    if let Some(config_path) = get_ffmpeg_source_config_path(app) {
+        if let Ok(content) = tokio::fs::read_to_string(&config_path).await {
+            return DependencySource::from_str(content.trim());
+        }
+    }
+    DependencySource::Auto
+}
+
+pub async fn set_ffmpeg_source(app: &AppHandle, source: &DependencySource) -> Result<(), String> {
+    let config_path = get_ffmpeg_source_config_path(app)
+        .ok_or("Failed to get config path")?;
+
+    if let Some(parent) = config_path.parent() {
+        tokio::fs::create_dir_all(parent).await
+            .map_err(|e| format!("Failed to create bin directory: {}", e))?;
+    }
+
+    tokio::fs::write(&config_path, source.as_str()).await
+        .map_err(|e| format!("Failed to save source config: {}", e))?;
+
+    Ok(())
+}
+
+fn get_app_ffmpeg_path(app: &AppHandle) -> Option<PathBuf> {
+    let app_data_dir = app.path().app_data_dir().ok()?;
+    let bin_dir = app_data_dir.join("bin");
+    #[cfg(windows)]
+    let ffmpeg_path = bin_dir.join("ffmpeg.exe");
+    #[cfg(not(windows))]
+    let ffmpeg_path = bin_dir.join("ffmpeg");
+
+    if ffmpeg_path.exists() {
+        Some(ffmpeg_path)
+    } else {
+        None
+    }
+}
+
+fn get_system_binary_candidates(binary_name: &str) -> Vec<PathBuf> {
+    let mut candidates = vec![
+        PathBuf::from("/opt/homebrew/bin").join(binary_name),
+        PathBuf::from("/usr/local/bin").join(binary_name),
+        PathBuf::from("/usr/bin").join(binary_name),
+    ];
+
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            candidates.push(dir.join(binary_name));
+        }
+    }
+
+    let mut unique = Vec::new();
+    let mut seen = HashSet::new();
+    for path in candidates {
+        let key = path.to_string_lossy().to_string();
+        if seen.insert(key) {
+            unique.push(path);
+        }
+    }
+    unique
+}
+
+fn get_system_ffmpeg_path() -> Option<PathBuf> {
+    #[cfg(windows)]
+    let binary_name = "ffmpeg.exe";
+    #[cfg(not(windows))]
+    let binary_name = "ffmpeg";
+
+    get_system_binary_candidates(binary_name)
+        .into_iter()
+        .find(|p| p.exists())
+}
 
 /// Get the FFmpeg binary path (app data or system)
 pub async fn get_ffmpeg_path(app: &AppHandle) -> Option<PathBuf> {
-    // First check app data directory
-    if let Ok(app_data_dir) = app.path().app_data_dir() {
-        let bin_dir = app_data_dir.join("bin");
-        #[cfg(windows)]
-        let ffmpeg_path = bin_dir.join("ffmpeg.exe");
-        #[cfg(not(windows))]
-        let ffmpeg_path = bin_dir.join("ffmpeg");
-        
-        if ffmpeg_path.exists() {
-            return Some(ffmpeg_path);
-        }
+    match get_ffmpeg_source(app).await {
+        DependencySource::System => get_system_ffmpeg_path(),
+        DependencySource::App => get_app_ffmpeg_path(app),
+        DependencySource::Auto => get_app_ffmpeg_path(app).or_else(get_system_ffmpeg_path),
     }
-    
-    // Fallback: check if system ffmpeg is available
-    #[cfg(unix)]
-    {
-        let mut cmd = Command::new("which");
-        cmd.arg("ffmpeg");
-        cmd.hide_window();
-        let output = cmd.output().await.ok()?;
-        
-        if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path_str.is_empty() {
-                return Some(PathBuf::from(path_str));
-            }
-        }
-    }
-    
-    #[cfg(windows)]
-    {
-        let mut cmd = Command::new("where");
-        cmd.arg("ffmpeg");
-        cmd.hide_window();
-        let output = cmd.output().await.ok()?;
-        
-        if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout).lines().next()?.to_string();
-            if !path_str.is_empty() {
-                return Some(PathBuf::from(path_str));
-            }
-        }
-    }
-    
-    None
 }
 
 /// Check FFmpeg status
 pub async fn check_ffmpeg_internal(app: &AppHandle) -> Result<FfmpegStatus, String> {
-    // First check app data directory
-    if let Ok(app_data_dir) = app.path().app_data_dir() {
-        let bin_dir = app_data_dir.join("bin");
-        #[cfg(windows)]
-        let ffmpeg_path = bin_dir.join("ffmpeg.exe");
-        #[cfg(not(windows))]
-        let ffmpeg_path = bin_dir.join("ffmpeg");
-        
-        if ffmpeg_path.exists() {
-            let mut cmd = Command::new(&ffmpeg_path);
-            cmd.args(["-version"])
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            cmd.hide_window();
-            let output = cmd.output().await;
-            
-            if let Ok(output) = output {
+    if let Some(ffmpeg_path) = get_ffmpeg_path(app).await {
+        let mut cmd = Command::new(&ffmpeg_path);
+        cmd.args(["-version"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        cmd.hide_window();
+
+        if let Ok(output) = cmd.output().await {
+            if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let version = parse_ffmpeg_version(&stdout);
+                let app_path = get_app_ffmpeg_path(app);
+                let is_system = app_path
+                    .as_ref()
+                    .map(|p| p != &ffmpeg_path)
+                    .unwrap_or(true);
+
                 return Ok(FfmpegStatus {
                     installed: true,
                     version: Some(version),
                     binary_path: Some(ffmpeg_path.to_string_lossy().to_string()),
-                    is_system: false,
+                    is_system,
                 });
             }
         }
     }
-    
-    // Check system FFmpeg
-    let mut cmd = Command::new("ffmpeg");
-    cmd.args(["-version"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    cmd.hide_window();
-    let output = cmd.output().await;
-    
-    match output {
-        Ok(output) if output.status.success() => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let version = parse_ffmpeg_version(&stdout);
-            
-            #[cfg(unix)]
-            let path = {
-                let mut cmd = Command::new("which");
-                cmd.arg("ffmpeg");
-                cmd.hide_window();
-                cmd.output().await.ok()
-                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            };
-            
-            #[cfg(windows)]
-            let path = {
-                let mut cmd = Command::new("where");
-                cmd.arg("ffmpeg");
-                cmd.hide_window();
-                cmd.output().await.ok()
-                    .map(|o| String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("").to_string())
-            };
-            
-            #[cfg(not(any(unix, windows)))]
-            let path: Option<String> = None;
-            
-            Ok(FfmpegStatus {
-                installed: true,
-                version: Some(version),
-                binary_path: path,
-                is_system: true,
-            })
-        }
-        _ => Ok(FfmpegStatus {
-            installed: false,
-            version: None,
-            binary_path: None,
-            is_system: false,
-        }),
-    }
+
+    Ok(FfmpegStatus {
+        installed: false,
+        version: None,
+        binary_path: None,
+        is_system: false,
+    })
 }
 
 /// Parse FFmpeg version from output

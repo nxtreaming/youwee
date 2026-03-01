@@ -1,5 +1,33 @@
 use serde::{Deserialize, Serialize};
 
+/// Dependency source selection
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DependencySource {
+    #[default]
+    Auto,
+    App,
+    System,
+}
+
+impl DependencySource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DependencySource::Auto => "auto",
+            DependencySource::App => "app",
+            DependencySource::System => "system",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "app" => DependencySource::App,
+            "system" => DependencySource::System,
+            _ => DependencySource::Auto,
+        }
+    }
+}
+
 /// yt-dlp channel selection
 #[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq)]
 #[serde(rename_all = "lowercase")]

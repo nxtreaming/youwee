@@ -8,8 +8,11 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Thêm mới
+- **Bộ chọn nguồn dependency (yt-dlp/FFmpeg)** - Thêm tùy chọn trong Cài đặt → Phụ thuộc để chọn dùng binary do ứng dụng quản lý hoặc do hệ thống quản lý
+- **Xác nhận an toàn khi chuyển sang nguồn hệ thống** - Thêm hộp thoại xác nhận khi đổi yt-dlp/FFmpeg sang nguồn hệ thống để tránh bấm nhầm
 
 ### Thay đổi
+- **Nhãn nguồn hệ thống theo hệ điều hành** - Nhãn nguồn hệ thống giờ hiển thị theo nền tảng (`Homebrew` trên macOS, `PATH` trên Windows, trình quản lý gói trên Linux)
 
 ### Sửa lỗi
 
@@ -37,6 +40,8 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Làm mới UI/UX cho trang YouTube và Universal** - Tối giản thao tác nhập link, card preview, hàng đợi và phần title bar để giao diện gọn và đồng nhất hơn
 
 ### Sửa lỗi
+- **Đồng bộ resolve dependency giữa các tính năng** - Chuẩn hóa luồng chọn yt-dlp/FFmpeg trong download, metadata, channels và polling nền để luôn tôn trọng nguồn đã chọn
+- **Chế độ system fail rõ ràng khi thiếu binary** - Khi chọn nguồn hệ thống mà thiếu binary, ứng dụng giờ báo lỗi rõ ràng thay vì fallback ngầm
 
 ## [0.10.1] - 2026-02-15
 

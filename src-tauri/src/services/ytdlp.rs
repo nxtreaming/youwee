@@ -1,13 +1,119 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use tokio::process::Command;
-use crate::types::{BackendError, YtdlpVersionInfo, YtdlpChannel, YtdlpChannelInfo, YtdlpAllVersions};
+use crate::types::{BackendError, DependencySource, YtdlpVersionInfo, YtdlpChannel, YtdlpChannelInfo, YtdlpAllVersions};
 use crate::utils::CommandExt;
 
 const CHANNEL_CONFIG_FILE: &str = "ytdlp-channel.txt";
+const SOURCE_CONFIG_FILE: &str = "ytdlp-source.txt";
+
+pub fn system_ytdlp_not_found_message() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        return "System yt-dlp not found. Install it with Homebrew (`brew install yt-dlp`) or switch to App managed in Settings > Dependencies.".to_string();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return "System yt-dlp not found. Install it with your package manager (e.g. `winget`, `choco`, or `scoop`) and ensure `yt-dlp` is available in PATH, or switch to App managed in Settings > Dependencies.".to_string();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return "System yt-dlp not found. Install it with your distro package manager and ensure `yt-dlp` is available in PATH, or switch to App managed in Settings > Dependencies.".to_string();
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        "System yt-dlp not found. Install it and ensure `yt-dlp` is available in PATH, or switch to App managed in Settings > Dependencies.".to_string()
+    }
+}
+
+pub fn system_ytdlp_upgrade_message() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        return "System yt-dlp is managed externally. Update it with Homebrew (`brew upgrade yt-dlp`) or switch source to App managed.".to_string();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return "System yt-dlp is managed externally. Update it with your package manager (e.g. `winget`, `choco`, or `scoop`) or switch source to App managed.".to_string();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return "System yt-dlp is managed externally. Update it with your distro package manager or switch source to App managed.".to_string();
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        "System yt-dlp is managed externally. Update it with your package manager or switch source to App managed.".to_string()
+    }
+}
+
+/// Get the config file path for storing yt-dlp source selection
+fn get_source_config_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_data_dir().ok().map(|p| p.join("bin").join(SOURCE_CONFIG_FILE))
+}
+
+/// Read the current yt-dlp source from config file
+pub async fn get_ytdlp_source(app: &AppHandle) -> DependencySource {
+    if let Some(config_path) = get_source_config_path(app) {
+        if let Ok(content) = tokio::fs::read_to_string(&config_path).await {
+            return DependencySource::from_str(content.trim());
+        }
+    }
+    DependencySource::Auto
+}
+
+/// Save the yt-dlp source to config file
+pub async fn set_ytdlp_source(app: &AppHandle, source: &DependencySource) -> Result<(), String> {
+    let config_path = get_source_config_path(app)
+        .ok_or("Failed to get config path")?;
+
+    if let Some(parent) = config_path.parent() {
+        tokio::fs::create_dir_all(parent).await
+            .map_err(|e| format!("Failed to create bin directory: {}", e))?;
+    }
+
+    tokio::fs::write(&config_path, source.as_str()).await
+        .map_err(|e| format!("Failed to save source config: {}", e))?;
+
+    Ok(())
+}
+
+fn get_system_binary_candidates(binary_name: &str) -> Vec<PathBuf> {
+    let mut candidates = vec![
+        PathBuf::from("/opt/homebrew/bin").join(binary_name),
+        PathBuf::from("/usr/local/bin").join(binary_name),
+        PathBuf::from("/usr/bin").join(binary_name),
+    ];
+
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            candidates.push(dir.join(binary_name));
+        }
+    }
+
+    let mut unique = Vec::new();
+    let mut seen = HashSet::new();
+    for path in candidates {
+        let key = path.to_string_lossy().to_string();
+        if seen.insert(key) {
+            unique.push(path);
+        }
+    }
+    unique
+}
+
+fn get_system_ytdlp_path() -> Option<PathBuf> {
+    #[cfg(windows)]
+    let binary_name = "yt-dlp.exe";
+    #[cfg(not(windows))]
+    let binary_name = "yt-dlp";
+
+    get_system_binary_candidates(binary_name)
+        .into_iter()
+        .find(|p| p.exists())
+}
 
 /// Get the config file path for storing channel selection
 fn get_channel_config_path(app: &AppHandle) -> Option<PathBuf> {
@@ -187,6 +293,12 @@ pub fn get_channel_api_url(channel: &YtdlpChannel) -> Option<&'static str> {
 /// Get the path to yt-dlp binary based on current channel setting
 /// Returns: (path, is_bundled)
 pub async fn get_ytdlp_path(app: &AppHandle) -> Option<(PathBuf, bool)> {
+    let source = get_ytdlp_source(app).await;
+
+    if source == DependencySource::System {
+        return get_system_ytdlp_path().map(|p| (p, false));
+    }
+
     let channel = get_ytdlp_channel(app).await;
     
     match channel {
@@ -231,6 +343,8 @@ pub struct YtdlpOutput {
 
 /// Helper to run yt-dlp command and get output with stderr
 pub async fn run_ytdlp_with_stderr(app: &AppHandle, args: &[&str]) -> Result<YtdlpOutput, String> {
+    let source = get_ytdlp_source(app).await;
+
     // Try to get yt-dlp path (prioritizes user-updated version)
     if let Some((binary_path, _)) = get_ytdlp_path(app).await {
         let mut cmd = Command::new(&binary_path);
@@ -249,6 +363,10 @@ pub async fn run_ytdlp_with_stderr(app: &AppHandle, args: &[&str]) -> Result<Ytd
         });
     }
     
+    if source == DependencySource::System {
+        return Err(BackendError::new(crate::types::code::YTDLP_SYSTEM_NOT_FOUND, system_ytdlp_not_found_message()).to_wire_string());
+    }
+
     // Fallback to sidecar
     let sidecar_result = app.shell().sidecar("yt-dlp");
     
@@ -284,21 +402,24 @@ pub async fn run_ytdlp_with_stderr(app: &AppHandle, args: &[&str]) -> Result<Ytd
             Ok(YtdlpOutput { stdout, stderr, success })
         }
         Err(_) => {
-            // Fallback to system yt-dlp
-            let mut cmd = Command::new("yt-dlp");
-            cmd.args(args)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            cmd.hide_window();
-            
-            let output = cmd.output().await
-                .map_err(|e| BackendError::from_message(format!("Failed to run yt-dlp: {}", e)).to_wire_string())?;
-            
-            Ok(YtdlpOutput {
-                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-                success: output.status.success(),
-            })
+            if source == DependencySource::Auto {
+                let mut cmd = Command::new("yt-dlp");
+                cmd.args(args)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped());
+                cmd.hide_window();
+
+                let output = cmd.output().await
+                    .map_err(|e| BackendError::from_message(format!("Failed to run yt-dlp: {}", e)).to_wire_string())?;
+
+                Ok(YtdlpOutput {
+                    stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                    stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                    success: output.status.success(),
+                })
+            } else {
+                Err(BackendError::from_message("App-managed yt-dlp not found. Please install it from Settings > Dependencies.").to_wire_string())
+            }
         }
     }
 }
@@ -382,6 +503,8 @@ pub fn parse_ytdlp_error(stderr: &str) -> Option<BackendError> {
 
 /// Helper to run yt-dlp command and get JSON output
 pub async fn run_ytdlp_json(app: &AppHandle, args: &[&str]) -> Result<String, String> {
+    let source = get_ytdlp_source(app).await;
+
     // Try to get yt-dlp path (prioritizes user-updated version)
     if let Some((binary_path, _)) = get_ytdlp_path(app).await {
         let mut cmd = Command::new(&binary_path);
@@ -404,6 +527,10 @@ pub async fn run_ytdlp_json(app: &AppHandle, args: &[&str]) -> Result<String, St
         return Ok(String::from_utf8_lossy(&output.stdout).to_string());
     }
     
+    if source == DependencySource::System {
+        return Err(BackendError::new(crate::types::code::YTDLP_SYSTEM_NOT_FOUND, system_ytdlp_not_found_message()).to_wire_string());
+    }
+
     // Fallback to sidecar
     let sidecar_result = app.shell().sidecar("yt-dlp");
     
@@ -444,32 +571,37 @@ pub async fn run_ytdlp_json(app: &AppHandle, args: &[&str]) -> Result<String, St
             Ok(output)
         }
         Err(_) => {
-            // Fallback to system yt-dlp
-            let mut cmd = Command::new("yt-dlp");
-            cmd.args(args)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            cmd.hide_window();
-            
-            let output = cmd.output().await
-                .map_err(|e| BackendError::from_message(format!("Failed to run yt-dlp: {}", e)).to_wire_string())?;
-            
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                // Parse stderr for user-friendly error
-                if let Some(parsed_error) = parse_ytdlp_error(&stderr) {
-                    return Err(parsed_error.to_wire_string());
+            if source == DependencySource::Auto {
+                let mut cmd = Command::new("yt-dlp");
+                cmd.args(args)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped());
+                cmd.hide_window();
+
+                let output = cmd.output().await
+                    .map_err(|e| BackendError::from_message(format!("Failed to run yt-dlp: {}", e)).to_wire_string())?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    // Parse stderr for user-friendly error
+                    if let Some(parsed_error) = parse_ytdlp_error(&stderr) {
+                        return Err(parsed_error.to_wire_string());
+                    }
+                    return Err(BackendError::from_message("yt-dlp command failed").to_wire_string());
                 }
-                return Err(BackendError::from_message("yt-dlp command failed").to_wire_string());
+
+                Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            } else {
+                Err(BackendError::from_message("App-managed yt-dlp not found. Please install it from Settings > Dependencies.").to_wire_string())
             }
-            
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
         }
     }
 }
 
 /// Get yt-dlp version
 pub async fn get_ytdlp_version_internal(app: &AppHandle) -> Result<YtdlpVersionInfo, String> {
+    let source = get_ytdlp_source(app).await;
+
     // Try to get yt-dlp path (prioritizes user-updated version)
     if let Some((binary_path, is_bundled)) = get_ytdlp_path(app).await {
         let mut cmd = Command::new(&binary_path);
@@ -493,6 +625,10 @@ pub async fn get_ytdlp_version_internal(app: &AppHandle) -> Result<YtdlpVersionI
         });
     }
     
+    if source == DependencySource::System {
+        return Err(BackendError::new(crate::types::code::YTDLP_SYSTEM_NOT_FOUND, system_ytdlp_not_found_message()).to_wire_string());
+    }
+
     // Fallback to sidecar
     let sidecar_result = app.shell().sidecar("yt-dlp");
     
@@ -519,26 +655,25 @@ pub async fn get_ytdlp_version_internal(app: &AppHandle) -> Result<YtdlpVersionI
             (version, true, bin_path)
         }
         Err(_) => {
+            if source != DependencySource::Auto {
+                return Err(BackendError::new(crate::types::code::YTDLP_APP_NOT_FOUND, "App-managed yt-dlp not found. Please install it from Settings > Dependencies.").with_retryable(false).to_wire_string());
+            }
+
             let mut cmd = Command::new("yt-dlp");
             cmd.args(["--version"])
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
             cmd.hide_window();
-            
+
             let output = cmd.output().await
                 .map_err(|e| BackendError::from_message(format!("yt-dlp not found: {}", e)).to_wire_string())?;
-            
+
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            
-            let mut which_cmd = Command::new("which");
-            which_cmd.arg("yt-dlp");
-            which_cmd.hide_window();
-            let which_output = which_cmd.output().await.ok();
-            
-            let bin_path = which_output
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+
+            let bin_path = get_system_ytdlp_path()
+                .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|| "system".to_string());
-            
+
             (version, false, bin_path)
         }
     };

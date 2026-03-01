@@ -18,12 +18,18 @@ use tauri_plugin_shell::process::CommandEvent;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-use crate::types::{BackendError, DownloadProgress};
+use crate::types::{BackendError, DependencySource, DownloadProgress};
 use crate::database::add_log_internal;
 use crate::database::add_history_internal;
 use crate::database::update_history_download;
 use crate::utils::{build_format_string, parse_progress, format_size, sanitize_output_path, CommandExt};
-use crate::services::{get_ffmpeg_path, get_deno_path, get_ytdlp_path};
+use crate::services::{
+    get_ffmpeg_path,
+    get_deno_path,
+    get_ytdlp_path,
+    get_ytdlp_source,
+    system_ytdlp_not_found_message,
+};
 
 pub static CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
 
@@ -374,6 +380,11 @@ pub async fn download_video(
         
         return handle_tokio_download(app, id, process, quality, format, url, should_log_stderr, title, thumbnail, source, download_sections).await;
     }
+
+    let ytdlp_source = get_ytdlp_source(&app).await;
+    if ytdlp_source == DependencySource::System {
+        return Err(BackendError::new(crate::types::code::YTDLP_SYSTEM_NOT_FOUND, system_ytdlp_not_found_message()).to_wire_string());
+    }
     
     // Fallback to sidecar
     let sidecar_result = app.shell().sidecar("yt-dlp");
@@ -681,6 +692,10 @@ pub async fn download_video(
             Ok(())
         }
         Err(_) => {
+            if ytdlp_source == DependencySource::App {
+                return Err(BackendError::new(crate::types::code::YTDLP_APP_NOT_FOUND, "App-managed yt-dlp not found. Please install it from Settings > Dependencies.").with_retryable(false).to_wire_string());
+            }
+
             // Fallback to system yt-dlp
             let mut cmd = Command::new("yt-dlp");
             cmd.args(&args)
