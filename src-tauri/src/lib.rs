@@ -91,6 +91,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            // Windows: remove native title bar so the frontend can render
+            // a custom one that transitions seamlessly with the app theme.
+            #[cfg(windows)]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_decorations(false);
+            }
+
             // Queue deep links from cold-start arguments so frontend can consume on mount.
             let argv: Vec<String> = std::env::args().collect();
             let initial_links = commands::extract_external_links_from_argv(&argv);
