@@ -335,6 +335,20 @@ jobs:
             CHANGELOG_ZH_JSON=$(to_json_safe "$CHANGELOG_ZH")
             echo "$CHANGELOG_ZH_JSON" > CHANGELOG_ZH_JSON.txt
           fi
+
+          # Extract French changelog
+          CHANGELOG_FR=$(extract_changelog "docs/CHANGELOG.fr.md")
+          if [ -n "$CHANGELOG_FR" ]; then
+            CHANGELOG_FR_JSON=$(to_json_safe "$CHANGELOG_FR")
+            echo "$CHANGELOG_FR_JSON" > CHANGELOG_FR_JSON.txt
+          fi
+
+          # Extract Russian changelog
+          CHANGELOG_RU=$(extract_changelog "docs/CHANGELOG.ru.md")
+          if [ -n "$CHANGELOG_RU" ]; then
+            CHANGELOG_RU_JSON=$(to_json_safe "$CHANGELOG_RU")
+            echo "$CHANGELOG_RU_JSON" > CHANGELOG_RU_JSON.txt
+          fi
           
           echo "Extracted changelog:"
           cat CHANGELOG_EXTRACT.md
@@ -348,6 +362,8 @@ jobs:
           NOTES=$(cat CHANGELOG_JSON.txt 2>/dev/null || echo "Youwee $GITHUB_REF_NAME - Check release notes for details")
           NOTES_VI=$(cat CHANGELOG_VI_JSON.txt 2>/dev/null || echo "")
           NOTES_ZH=$(cat CHANGELOG_ZH_JSON.txt 2>/dev/null || echo "")
+          NOTES_FR=$(cat CHANGELOG_FR_JSON.txt 2>/dev/null || echo "")
+          NOTES_RU=$(cat CHANGELOG_RU_JSON.txt 2>/dev/null || echo "")
           
           # Build notes fields
           NOTES_EXTRA=""
@@ -358,6 +374,14 @@ jobs:
           if [ -n "$NOTES_ZH" ]; then
             NOTES_EXTRA="$NOTES_EXTRA
             \"notes_zh-CN\": \"$NOTES_ZH\","
+          fi
+          if [ -n "$NOTES_FR" ]; then
+            NOTES_EXTRA="$NOTES_EXTRA
+            \"notes_fr\": \"$NOTES_FR\","
+          fi
+          if [ -n "$NOTES_RU" ]; then
+            NOTES_EXTRA="$NOTES_EXTRA
+            \"notes_ru\": \"$NOTES_RU\","
           fi
           
           # Find signature files and create platform entries
