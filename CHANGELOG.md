@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.12.0] - 2026-03-04
+
+### Added
 - **Dependency source selector (yt-dlp/FFmpeg)** - Added source switching in Settings → Dependencies so users can choose between app-managed binaries and system-managed binaries
 - **Safety confirmation before switching to system source** - Added a confirmation dialog when switching yt-dlp/FFmpeg to system source to prevent accidental changes
 

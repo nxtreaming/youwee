@@ -8,6 +8,14 @@ et ce projet suit [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Ajouté
+
+### Modifié
+
+### Corrigé
+
+## [0.12.0] - 2026-03-04
+
+### Ajouté
 - **Sélecteur de source des dépendances (yt-dlp/FFmpeg)** - Ajout d'un sélecteur dans Paramètres → Dépendances pour choisir entre les binaires gérés par l'application et ceux gérés par le système
 - **Confirmation de sécurité avant bascule vers la source système** - Ajout d'une boîte de confirmation lors du passage de yt-dlp/FFmpeg à la source système pour éviter les changements accidentels
 
