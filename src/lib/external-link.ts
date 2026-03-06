@@ -135,6 +135,13 @@ export function normalizeExternalVideoUrl(url: string): string {
         parsed.searchParams.delete('index');
       }
     }
+    // Douyin: any page with modal_id → direct video URL
+    if (host === 'www.douyin.com' || host === 'douyin.com') {
+      const modalId = parsed.searchParams.get('modal_id');
+      if (modalId && /^\d+$/.test(modalId) && !parsed.pathname.startsWith('/video/')) {
+        return `https://www.douyin.com/video/${modalId}`;
+      }
+    }
     return parsed.toString();
   } catch {
     return url;

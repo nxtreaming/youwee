@@ -176,7 +176,8 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       // Get output path from filepath, or from user settings if filepath is empty
       let outputPath = '';
       if (entry.filepath) {
-        outputPath = entry.filepath.substring(0, entry.filepath.lastIndexOf('/'));
+        const lastSep = Math.max(entry.filepath.lastIndexOf('/'), entry.filepath.lastIndexOf('\\'));
+        outputPath = lastSep > 0 ? entry.filepath.substring(0, lastSep) : '';
       }
 
       // Get settings from localStorage
@@ -355,6 +356,19 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       }
     }, 30000);
     return () => clearInterval(interval);
+  }, [refreshHistory]);
+
+  // Refresh history whenever any download completes (including audio)
+  useEffect(() => {
+    const unlisten = listen<DownloadProgress>('download-progress', (event) => {
+      if (event.payload.status === 'finished') {
+        // Delay slightly to ensure Rust has finished writing the DB record
+        setTimeout(() => refreshHistory(), 800);
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, [refreshHistory]);
 
   return (

@@ -15,7 +15,7 @@ use crate::services::{
     run_ytdlp_with_stderr,
 };
 use crate::utils::CommandExt;
-use crate::utils::validate_url;
+use crate::utils::{normalize_url, validate_url};
 use crate::database;
 
 /// Build a fallback video URL based on the channel's platform.
@@ -44,7 +44,8 @@ pub async fn get_channel_videos(
     proxy_url: Option<String>,
 ) -> Result<Vec<PlaylistVideoEntry>, String> {
     validate_url(&url)?;
-    
+    let url = normalize_url(&url);
+
     let is_youtube = url.contains("youtube.com") || url.contains("youtu.be");
     let max_attempts = if is_youtube { 1 } else { 2 };
 
@@ -360,7 +361,8 @@ pub async fn get_channel_info(
     proxy_url: Option<String>,
 ) -> Result<ChannelInfo, String> {
     validate_url(&url)?;
-    
+    let url = normalize_url(&url);
+
     // For Bilibili URLs, try the native API first (accurate name + avatar).
     // This avoids spawning a second yt-dlp process that could trigger rate-limiting.
     let is_bilibili = url.contains("bilibili.com") || url.contains("b23.tv");

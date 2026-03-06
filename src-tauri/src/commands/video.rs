@@ -4,7 +4,7 @@ use tokio::time::timeout;
 use uuid::Uuid;
 use crate::types::{BackendError, VideoInfo, FormatOption, VideoInfoResponse, PlaylistVideoEntry, SubtitleInfo};
 use crate::services::{parse_ytdlp_error, run_ytdlp_json_with_cookies, run_ytdlp_with_stderr_and_cookies, run_ytdlp_with_stderr, build_cookie_args, get_deno_path};
-use crate::utils::validate_url;
+use crate::utils::{normalize_url, validate_url};
 use crate::database::add_log_internal;
 
 fn default_transcript_languages(url: &str) -> Vec<String> {
@@ -44,7 +44,8 @@ pub async fn get_video_transcript(
     println!("[TRANSCRIPT] Fetching transcript for URL: {}", &url);
     
     validate_url(&url).map_err(|e| BackendError::from_message(e).to_wire_string())?;
-    
+    let url = normalize_url(&url);
+
     add_log_internal("info", &format!("Fetching transcript for AI summary"), None, Some(&url)).ok();
     
     // Create unique temp directory for this request (using UUID to prevent any contamination)
@@ -580,7 +581,8 @@ pub async fn get_video_info(
     proxy_url: Option<String>,
 ) -> Result<VideoInfoResponse, String> {
     validate_url(&url).map_err(|e| BackendError::from_message(e).to_wire_string())?;
-    
+    let url = normalize_url(&url);
+
     let mut args = vec![
         "--dump-json".to_string(),
         "--no-download".to_string(),
@@ -688,7 +690,8 @@ pub async fn get_playlist_entries(
     proxy_url: Option<String>,
 ) -> Result<Vec<PlaylistVideoEntry>, String> {
     validate_url(&url).map_err(|e| BackendError::from_message(e).to_wire_string())?;
-    
+    let url = normalize_url(&url);
+
     let mut args = vec![
         "--flat-playlist".to_string(),
         "--dump-json".to_string(),
@@ -810,7 +813,8 @@ pub async fn get_available_subtitles(
     proxy_url: Option<String>,
 ) -> Result<Vec<SubtitleInfo>, String> {
     validate_url(&url).map_err(|e| BackendError::from_message(e).to_wire_string())?;
-    
+    let url = normalize_url(&url);
+
     let mut args = vec![
         "--list-subs".to_string(),
         "--skip-download".to_string(),

@@ -8,13 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.12.0] - 2026-03-04
+
+### Added
 - **Dependency source selector (yt-dlp/FFmpeg)** - Added source switching in Settings → Dependencies so users can choose between app-managed binaries and system-managed binaries
 - **Safety confirmation before switching to system source** - Added a confirmation dialog when switching yt-dlp/FFmpeg to system source to prevent accidental changes
 
 ### Changed
 - **OS-aware system source label** - System source label now adapts by platform (`Homebrew` on macOS, `PATH` on Windows, package manager on Linux)
+- **Automated GitHub release notes in build workflow** - Enabled `generate_release_notes` in the release workflow so published releases include auto-generated notes
+- **Windows custom title bar integration** - Replaced the native Windows title bar with app-themed custom controls (drag region, minimize/maximize/close) for consistent theming
 
 ### Fixed
+- **Windows download history recording** - Captured final output filepath reliably on Windows so completed downloads are correctly added to Library history
+- **Windows redownload path parsing** - Fixed output folder extraction for backslash-based Windows paths when redownloading items
+- **Non-UTF-8 yt-dlp output on Windows** - Added GBK/ANSI decoding fallback and `--print-to-file` handling so non-UTF-8 locales still capture final file paths correctly
+- **Library auto-refresh after download completion** - Library history now refreshes automatically when a download status changes to `finished`
+- **Douyin modal URL compatibility** - Normalized `douyin.com` URLs with `modal_id` into canonical `/video/{id}` format in backend yt-dlp calls and frontend deep-link parsing
 
 ## [0.11.1] - 2026-03-01
 

@@ -5,6 +5,8 @@
   [![English](https://img.shields.io/badge/lang-English-blue)](../README.md)
   [![Tiếng Việt](https://img.shields.io/badge/lang-Tiếng_Việt-red)](README.vi.md)
   [![简体中文](https://img.shields.io/badge/lang-简体中文-green)](README.zh-CN.md)
+  [![Français](https://img.shields.io/badge/lang-Français-0055A4)](README.fr.md)
+  [![Русский](https://img.shields.io/badge/lang-Русский-1F5FBF)](README.ru.md)
   [![Vote for next language](https://img.shields.io/badge/Vote-Ngôn_ngữ_tiếp_theo-orange?logo=github)](https://github.com/vanloctech/youwee/discussions/18)
 
   <img src="../src-tauri/icons/icon.png" alt="Youwee Logo" width="128" height="128">

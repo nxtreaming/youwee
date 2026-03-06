@@ -18,7 +18,7 @@ use crate::services::{
     system_ytdlp_not_found_message,
 };
 use crate::types::{BackendError, DependencySource};
-use crate::utils::{sanitize_output_path, validate_url, CommandExt};
+use crate::utils::{normalize_url, sanitize_output_path, validate_url, CommandExt};
 
 pub static METADATA_CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
 
@@ -129,6 +129,7 @@ pub async fn fetch_metadata(
 ) -> Result<(), String> {
     METADATA_CANCEL_FLAG.store(false, Ordering::SeqCst);
     validate_url(&url).map_err(|e| BackendError::from_message(e).to_wire_string())?;
+    let url = normalize_url(&url);
 
     let sanitized_path =
         sanitize_output_path(&output_path).map_err(|e| BackendError::from_message(e).to_wire_string())?;
