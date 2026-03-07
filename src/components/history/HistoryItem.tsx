@@ -11,6 +11,7 @@ import {
   FolderOpen,
   HardDrive,
   Loader2,
+  Pencil,
   RefreshCw,
   Scissors,
   Sparkles,
@@ -59,15 +60,20 @@ function formatRelativeTime(
 
 export function HistoryItem({ entry }: HistoryItemProps) {
   const { t } = useTranslation('pages');
-  const { openFileLocation, deleteEntry, redownload, getRedownloadTask } = useHistory();
+  const { openFileLocation, deleteEntry, renameEntry, redownload, getRedownloadTask } =
+    useHistory();
   const ai = useAI();
   const [isDeleting, setIsDeleting] = useState(false);
   const [redownloadError, setRedownloadError] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [localSummary, setLocalSummary] = useState<string | undefined>(entry.summary);
   const [showFullSummary, setShowFullSummary] = useState(false);
   const [thumbError, setThumbError] = useState(false);
+  const [isRenameEditorOpen, setIsRenameEditorOpen] = useState(false);
+  const [renameName, setRenameName] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
 
   // Get redownload task from context (persists across page changes)
   const redownloadTask = getRedownloadTask(entry.id);
@@ -128,6 +134,34 @@ export function HistoryItem({ entry }: HistoryItemProps) {
       setRedownloadError(message);
     }
   }, [redownload, entry, t]);
+
+  const handleOpenRenameEditor = useCallback(() => {
+    setRenameName(entry.title);
+    setRenameError(null);
+    setIsRenameEditorOpen(true);
+  }, [entry.title]);
+
+  const handleCancelRename = useCallback(() => {
+    setIsRenameEditorOpen(false);
+    setRenameError(null);
+    setRenameName('');
+  }, []);
+
+  const handleRename = useCallback(async () => {
+    if (isRenaming) return;
+
+    setRenameError(null);
+    setIsRenaming(true);
+    try {
+      await renameEntry(entry.id, renameName);
+      setIsRenameEditorOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('library.item.renameFailed');
+      setRenameError(message);
+    } finally {
+      setIsRenaming(false);
+    }
+  }, [isRenaming, renameEntry, entry.id, renameName, t]);
 
   const handleCopyUrl = useCallback(() => {
     navigator.clipboard.writeText(entry.url);
@@ -339,6 +373,7 @@ export function HistoryItem({ entry }: HistoryItemProps) {
               {redownloadError || redownloadTask?.error}
             </p>
           )}
+          {renameError && <p className="text-xs text-destructive mt-2">{renameError}</p>}
 
           {/* Re-download progress bar */}
           {isRedownloading && (
@@ -369,17 +404,30 @@ export function HistoryItem({ entry }: HistoryItemProps) {
             )}
           >
             {entry.file_exists ? (
-              <button
-                type="button"
-                onClick={handleOpenFolder}
-                className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium',
-                  'bg-primary/10 hover:bg-primary/20 text-primary transition-colors',
-                )}
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-                {t('library.item.openFolder')}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleOpenFolder}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium',
+                    'bg-primary/10 hover:bg-primary/20 text-primary transition-colors',
+                  )}
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  {t('library.item.openFolder')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenRenameEditor}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium',
+                    'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors',
+                  )}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  {t('library.item.rename')}
+                </button>
+              </>
             ) : (
               <button
                 type="button"
@@ -448,6 +496,39 @@ export function HistoryItem({ entry }: HistoryItemProps) {
               {t('library.item.delete')}
             </button>
           </div>
+
+          {isRenameEditorOpen && entry.file_exists && (
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/50 p-2">
+              <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <input
+                type="text"
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+                placeholder={t('library.item.renamePlaceholder')}
+                className="h-7 flex-1 rounded border border-border/50 bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50"
+              />
+              <button
+                type="button"
+                onClick={handleRename}
+                disabled={isRenaming}
+                className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+              >
+                {isRenaming ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  t('library.item.renameSave')
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelRename}
+                disabled={isRenaming}
+                className="rounded-md px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+              >
+                {t('library.item.renameCancel')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

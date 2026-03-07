@@ -99,6 +99,11 @@
       "retrying": "{{seconds}}秒后重试 {{current}}/{{total}}"
     },
     "summarize": "摘要",
+    "rename": "重命名",
+    "renamePlaceholder": "输入新文件名",
+    "renameSave": "保存",
+    "renameCancel": "取消",
+    "renameFailed": "重命名文件失败",
     "fetchingTranscript": "获取字幕中...",
     "generating": "生成中...",
     "showMore": "展开",

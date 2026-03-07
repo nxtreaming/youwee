@@ -1,34 +1,33 @@
 //! Download command - handles video downloading with yt-dlp
-//! 
+//!
 //! This module contains the core download functionality including:
 //! - Video/audio download with quality/format options
 //! - Playlist support
 //! - Progress tracking
 //! - Subtitle handling
 
-use std::process::Stdio;
 use std::collections::VecDeque;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::utils::{normalize_url, validate_url};
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-use crate::types::{BackendError, DependencySource, DownloadProgress};
-use crate::database::add_log_internal;
 use crate::database::add_history_internal;
+use crate::database::add_log_internal;
 use crate::database::update_history_download;
-use crate::utils::{build_format_string, parse_progress, format_size, sanitize_output_path, CommandExt};
 use crate::services::{
-    get_ffmpeg_path,
-    get_deno_path,
-    get_ytdlp_path,
-    get_ytdlp_source,
+    get_deno_path, get_ffmpeg_path, get_ytdlp_path, get_ytdlp_source,
     system_ytdlp_not_found_message,
+};
+use crate::types::{BackendError, DependencySource, DownloadProgress};
+use crate::utils::{
+    build_format_string, format_size, parse_progress, sanitize_output_path, CommandExt,
 };
 
 pub static CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
@@ -68,18 +67,24 @@ fn decode_process_output(bytes: &[u8]) -> String {
 
     unsafe {
         let len = MultiByteToWideChar(
-            CP_ACP, 0,
-            bytes.as_ptr(), bytes.len() as i32,
-            std::ptr::null_mut(), 0,
+            CP_ACP,
+            0,
+            bytes.as_ptr(),
+            bytes.len() as i32,
+            std::ptr::null_mut(),
+            0,
         );
         if len <= 0 {
             return String::from_utf8_lossy(bytes).into_owned();
         }
         let mut wide = vec![0u16; len as usize];
         MultiByteToWideChar(
-            CP_ACP, 0,
-            bytes.as_ptr(), bytes.len() as i32,
-            wide.as_mut_ptr(), len,
+            CP_ACP,
+            0,
+            bytes.as_ptr(),
+            bytes.len() as i32,
+            wide.as_mut_ptr(),
+            len,
         );
         OsString::from_wide(&wide).to_string_lossy().into_owned()
     }
@@ -95,18 +100,24 @@ fn kill_all_download_processes() {
     #[cfg(unix)]
     {
         use std::process::Command as StdCommand;
-        StdCommand::new("pkill").args(["-9", "-f", "yt-dlp"]).spawn().ok();
-        StdCommand::new("pkill").args(["-9", "-f", "ffmpeg"]).spawn().ok();
+        StdCommand::new("pkill")
+            .args(["-9", "-f", "yt-dlp"])
+            .spawn()
+            .ok();
+        StdCommand::new("pkill")
+            .args(["-9", "-f", "ffmpeg"])
+            .spawn()
+            .ok();
     }
     #[cfg(windows)]
     {
-        use std::process::Command as StdCommand;
         use crate::utils::CommandExt as _;
+        use std::process::Command as StdCommand;
         let mut cmd1 = StdCommand::new("taskkill");
         cmd1.args(["/F", "/IM", "yt-dlp.exe"]);
         cmd1.hide_window();
         cmd1.spawn().ok();
-        
+
         let mut cmd2 = StdCommand::new("taskkill");
         cmd2.args(["/F", "/IM", "ffmpeg.exe"]);
         cmd2.hide_window();
@@ -172,7 +183,10 @@ fn normalize_aria2_args(raw_args: &str) -> Option<String> {
 }
 
 fn build_download_error_message(exit_code: Option<i32>, recent_lines: &[String]) -> BackendError {
-    if recent_lines.iter().any(|line| is_aria2_not_found_line(line)) {
+    if recent_lines
+        .iter()
+        .any(|line| is_aria2_not_found_line(line))
+    {
         return BackendError::new(
             crate::types::code::ARIA2_NOT_FOUND,
             "aria2c not found. Install aria2 and ensure aria2c is available in PATH.",
@@ -198,8 +212,10 @@ fn build_download_error_message(exit_code: Option<i32>, recent_lines: &[String])
         .unwrap_or_else(|| "Unknown error".to_string());
 
     match exit_code {
-        Some(code) => BackendError::from_message(format!("Download failed (exit code {}): {}", code, reason))
-            .with_param("exitCode", code),
+        Some(code) => {
+            BackendError::from_message(format!("Download failed (exit code {}): {}", code, reason))
+                .with_param("exitCode", code)
+        }
         None => BackendError::from_message(format!("Download failed: {}", reason)),
     }
 }
@@ -242,10 +258,10 @@ pub async fn download_video(
     use_aria2: Option<bool>,
     aria2_args: Option<String>,
     // SponsorBlock settings
-    sponsorblock_remove: Option<String>,  // comma-separated categories to remove
-    sponsorblock_mark: Option<String>,    // comma-separated categories to mark as chapters
+    sponsorblock_remove: Option<String>, // comma-separated categories to remove
+    sponsorblock_mark: Option<String>,   // comma-separated categories to mark as chapters
     // Download sections (time range)
-    download_sections: Option<String>,    // e.g. "*10:30-14:30" for partial download
+    download_sections: Option<String>, // e.g. "*10:30-14:30" for partial download
     // Title (optional, passed from frontend for display purposes)
     title: Option<String>,
     // Thumbnail URL (optional, passed from frontend for non-YouTube sites)
@@ -258,8 +274,8 @@ pub async fn download_video(
     let url = normalize_url(&url);
 
     let should_log_stderr = log_stderr.unwrap_or(true);
-    let sanitized_path =
-        sanitize_output_path(&output_path).map_err(|e| BackendError::from_message(e).to_wire_string())?;
+    let sanitized_path = sanitize_output_path(&output_path)
+        .map_err(|e| BackendError::from_message(e).to_wire_string())?;
     let format_string = build_format_string(&quality, &format, &video_codec);
     let output_template = format!("{}/%(title)s.%(ext)s", sanitized_path);
 
@@ -292,7 +308,7 @@ pub async fn download_video(
         "--file-access-retries".to_string(),
         "2".to_string(),
     ];
-    
+
     // Auto use Deno runtime for YouTube (required for JS extractor)
     // Use --js-runtimes instead of --extractor-args (handles spaces in path correctly)
     if url.contains("youtube.com") || url.contains("youtu.be") {
@@ -301,14 +317,16 @@ pub async fn download_video(
             args.push(format!("deno:{}", deno_path.to_string_lossy()));
         }
     }
-    
+
     // Add actual player.js version if enabled (fixes some YouTube download issues)
     // See: https://github.com/yt-dlp/yt-dlp/issues/14680
-    if use_actual_player_js.unwrap_or(false) && (url.contains("youtube.com") || url.contains("youtu.be")) {
+    if use_actual_player_js.unwrap_or(false)
+        && (url.contains("youtube.com") || url.contains("youtu.be"))
+    {
         args.push("--extractor-args".to_string());
         args.push("youtube:player_js_version=actual".to_string());
     }
-    
+
     // Add FFmpeg location if available
     if let Some(ffmpeg_path) = get_ffmpeg_path(&app).await {
         if let Some(parent) = ffmpeg_path.parent() {
@@ -316,7 +334,7 @@ pub async fn download_video(
             args.push(parent.to_string_lossy().to_string());
         }
     }
-    
+
     // Subtitle settings
     if subtitle_mode != "off" {
         args.push("--write-subs".to_string());
@@ -334,7 +352,7 @@ pub async fn download_video(
             args.push("--embed-subs".to_string());
         }
     }
-    
+
     // Cookie/Authentication settings
     let mode = cookie_mode.as_deref().unwrap_or("off");
     match mode {
@@ -361,7 +379,7 @@ pub async fn download_video(
         }
         _ => {}
     }
-    
+
     // Proxy settings
     if let Some(proxy) = proxy_url.as_ref() {
         if !proxy.is_empty() {
@@ -369,13 +387,13 @@ pub async fn download_video(
             args.push(proxy.clone());
         }
     }
-    
+
     // Live stream settings
     if live_from_start.unwrap_or(false) {
         args.push("--live-from-start".to_string());
         args.push("--no-part".to_string());
     }
-    
+
     // Speed limit settings
     if let Some(limit) = speed_limit.as_ref() {
         if !limit.is_empty() {
@@ -395,10 +413,10 @@ pub async fn download_video(
             }
         }
     }
-    
+
     // Force overwrite to avoid HTTP 416 errors from stale .part files
     args.push("--force-overwrites".to_string());
-    
+
     // Playlist handling
     if !download_playlist {
         args.push("--no-playlist".to_string());
@@ -408,10 +426,11 @@ pub async fn download_video(
             args.push(limit.to_string());
         }
     }
-    
+
     // Audio formats
-    let is_audio_format = format == "mp3" || format == "m4a" || format == "opus" || quality == "audio";
-    
+    let is_audio_format =
+        format == "mp3" || format == "m4a" || format == "opus" || quality == "audio";
+
     if is_audio_format {
         args.push("-x".to_string());
         args.push("--audio-format".to_string());
@@ -430,7 +449,7 @@ pub async fn download_video(
         args.push("--merge-output-format".to_string());
         args.push(format.clone());
     }
-    
+
     // Embed metadata and thumbnail
     if embed_metadata.unwrap_or(false) {
         args.push("--embed-metadata".to_string());
@@ -441,7 +460,7 @@ pub async fn download_video(
         args.push("--convert-thumbnails".to_string());
         args.push("jpg".to_string());
     }
-    
+
     // SponsorBlock settings
     if let Some(ref remove_cats) = sponsorblock_remove {
         if !remove_cats.is_empty() {
@@ -455,7 +474,7 @@ pub async fn download_video(
             args.push(mark_cats.clone());
         }
     }
-    
+
     // Download sections (time range)
     if let Some(ref sections) = download_sections {
         if !sections.is_empty() {
@@ -463,20 +482,21 @@ pub async fn download_video(
             args.push(sections.clone());
         }
     }
-    
+
     args.push("--".to_string());
     args.push(url.clone());
-    
+
     // Get binary info for logging
     let binary_info = get_ytdlp_path(&app).await;
-    let binary_path_str = binary_info.as_ref()
+    let binary_path_str = binary_info
+        .as_ref()
         .map(|(p, is_bundled)| format!("{} (bundled: {})", p.display(), is_bundled))
         .unwrap_or_else(|| "sidecar".to_string());
-    
+
     // Log command with binary path
     let command_str = format!("[{}] yt-dlp {}", binary_path_str, args.join(" "));
     add_log_internal("command", &command_str, None, Some(&url)).ok();
-    
+
     // Try to get yt-dlp path (prioritizes bundled version for stability)
     if let Some((binary_path, _)) = get_ytdlp_path(&app).await {
         // Build extended PATH with deno/bun locations for JavaScript runtime support
@@ -486,7 +506,7 @@ pub async fn download_video(
             "{}/.deno/bin:{}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:{}",
             home_dir, home_dir, current_path
         );
-        
+
         let mut cmd = Command::new(&binary_path);
         cmd.args(&args)
             .env("HOME", &home_dir)
@@ -494,37 +514,58 @@ pub async fn download_video(
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         cmd.hide_window();
-        
-        let process = cmd.spawn()
-            .map_err(|e| BackendError::from_message(format!("Failed to start yt-dlp: {}", e)).to_wire_string())?;
-        
-        return handle_tokio_download(app, id, process, quality, format, url, should_log_stderr, title, thumbnail, source, download_sections, filepath_tmp.clone()).await;
+
+        let process = cmd.spawn().map_err(|e| {
+            BackendError::from_message(format!("Failed to start yt-dlp: {}", e)).to_wire_string()
+        })?;
+
+        return handle_tokio_download(
+            app,
+            id,
+            process,
+            quality,
+            format,
+            url,
+            should_log_stderr,
+            title,
+            thumbnail,
+            source,
+            download_sections,
+            history_id.clone(),
+            filepath_tmp.clone(),
+        )
+        .await;
     }
 
     let ytdlp_source = get_ytdlp_source(&app).await;
     if ytdlp_source == DependencySource::System {
-        return Err(BackendError::new(crate::types::code::YTDLP_SYSTEM_NOT_FOUND, system_ytdlp_not_found_message()).to_wire_string());
+        return Err(BackendError::new(
+            crate::types::code::YTDLP_SYSTEM_NOT_FOUND,
+            system_ytdlp_not_found_message(),
+        )
+        .to_wire_string());
     }
-    
+
     // Fallback to sidecar
     let sidecar_result = app.shell().sidecar("yt-dlp");
-    
+
     match sidecar_result {
         Ok(sidecar) => {
-            let (mut rx, child) = sidecar
-                .args(&args)
-                .spawn()
-                .map_err(|e| BackendError::from_message(format!("Failed to start bundled yt-dlp: {}", e)).to_wire_string())?;
-            
+            let (mut rx, child) = sidecar.args(&args).spawn().map_err(|e| {
+                BackendError::from_message(format!("Failed to start bundled yt-dlp: {}", e))
+                    .to_wire_string()
+            })?;
+
             // Only use frontend title if it's not a URL (placeholder)
-            let mut current_title: Option<String> = title.clone().filter(|t| !t.starts_with("http"));
+            let mut current_title: Option<String> =
+                title.clone().filter(|t| !t.starts_with("http"));
             let mut current_index: Option<u32> = None;
             let mut total_count: Option<u32> = None;
             let mut total_filesize: u64 = 0;
             let mut current_stream_size: Option<u64> = None;
             let mut final_filepath: Option<String> = None;
             let mut recent_output: VecDeque<String> = VecDeque::new();
-            
+
             let quality_display = match quality.as_str() {
                 "8k" => Some("8K".to_string()),
                 "4k" => Some("4K".to_string()),
@@ -537,43 +578,51 @@ pub async fn download_video(
                 "best" => Some("Best".to_string()),
                 _ => None,
             };
-            
+
             while let Some(event) = rx.recv().await {
                 if CANCEL_FLAG.load(Ordering::SeqCst) {
                     child.kill().ok();
                     kill_all_download_processes();
                     return Err(BackendError::from_message("Download cancelled").to_wire_string());
                 }
-                
+
                 match event {
                     CommandEvent::Stdout(line_bytes) => {
                         let line = decode_process_output(&line_bytes);
                         push_recent_output(&mut recent_output, &line);
-                        
+
                         // Parse playlist item info
                         if line.contains("Downloading item") {
-                            if let Some(re) = regex::Regex::new(r"Downloading item (\d+) of (\d+)").ok() {
+                            if let Some(re) =
+                                regex::Regex::new(r"Downloading item (\d+) of (\d+)").ok()
+                            {
                                 if let Some(caps) = re.captures(&line) {
-                                    current_index = caps.get(1).and_then(|m| m.as_str().parse().ok());
+                                    current_index =
+                                        caps.get(1).and_then(|m| m.as_str().parse().ok());
                                     total_count = caps.get(2).and_then(|m| m.as_str().parse().ok());
                                 }
                             }
                         }
-                        
+
                         // Extract title from [download] messages
                         // Handles both: "Destination: /path/file.mp4" and "/path/file.mp4 has already been downloaded"
-                        if line.contains("[download]") && (line.contains("Destination:") || line.contains("has already been downloaded") || line.contains("[ExtractAudio]")) {
+                        if line.contains("[download]")
+                            && (line.contains("Destination:")
+                                || line.contains("has already been downloaded")
+                                || line.contains("[ExtractAudio]"))
+                        {
                             let path_sep = if line.contains('\\') { '\\' } else { '/' };
                             if let Some(start) = line.rfind(path_sep) {
                                 let filename = &line[start + 1..];
                                 // Remove suffix if present
-                                let filename = filename.trim_end_matches(" has already been downloaded");
+                                let filename =
+                                    filename.trim_end_matches(" has already been downloaded");
                                 if let Some(end) = filename.rfind('.') {
                                     current_title = Some(filename[..end].to_string());
                                 }
                             }
                         }
-                        
+
                         // Capture final filepath
                         let trimmed = line.trim();
                         if !trimmed.is_empty()
@@ -592,10 +641,16 @@ pub async fn download_video(
                         {
                             final_filepath = Some(trimmed.to_string());
                         }
-                        
+
                         // Parse filesize
-                        if line.contains(" of ") && (line.contains("MiB") || line.contains("GiB") || line.contains("KiB")) {
-                            if let Some(re) = regex::Regex::new(r"of\s+(\d+(?:\.\d+)?)\s*(GiB|MiB|KiB)").ok() {
+                        if line.contains(" of ")
+                            && (line.contains("MiB")
+                                || line.contains("GiB")
+                                || line.contains("KiB"))
+                        {
+                            if let Some(re) =
+                                regex::Regex::new(r"of\s+(\d+(?:\.\d+)?)\s*(GiB|MiB|KiB)").ok()
+                            {
                                 if let Some(caps) = re.captures(&line) {
                                     if let (Some(num), Some(unit)) = (caps.get(1), caps.get(2)) {
                                         if let Ok(size) = num.as_str().parse::<f64>() {
@@ -616,12 +671,18 @@ pub async fn download_video(
                                 }
                             }
                         }
-                        
+
                         // Parse progress
-                        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&line) {
-                            if pi.is_some() { current_index = pi; }
-                            if pc.is_some() { total_count = pc; }
-                            
+                        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) =
+                            parse_progress(&line)
+                        {
+                            if pi.is_some() {
+                                current_index = pi;
+                            }
+                            if pc.is_some() {
+                                total_count = pc;
+                            }
+
                             let progress = DownloadProgress {
                                 id: id.clone(),
                                 percent,
@@ -637,6 +698,8 @@ pub async fn download_video(
                                 error_message: None,
                                 error_code: None,
                                 error_params: None,
+                                history_id: None,
+                                filepath: None,
                                 downloaded_size,
                                 elapsed_time,
                             };
@@ -647,11 +710,17 @@ pub async fn download_video(
                         let stderr_line = decode_process_output(&bytes);
                         let stderr_line = stderr_line.trim().to_string();
                         push_recent_output(&mut recent_output, &stderr_line);
-                        
-                        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&stderr_line) {
-                            if pi.is_some() { current_index = pi; }
-                            if pc.is_some() { total_count = pc; }
-                            
+
+                        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) =
+                            parse_progress(&stderr_line)
+                        {
+                            if pi.is_some() {
+                                current_index = pi;
+                            }
+                            if pc.is_some() {
+                                total_count = pc;
+                            }
+
                             let progress = DownloadProgress {
                                 id: id.clone(),
                                 percent,
@@ -667,12 +736,14 @@ pub async fn download_video(
                                 error_message: None,
                                 error_code: None,
                                 error_params: None,
+                                history_id: None,
+                                filepath: None,
                                 downloaded_size,
                                 elapsed_time,
                             };
                             app.emit("download-progress", progress).ok();
                         }
-                        
+
                         if should_log_stderr && !stderr_line.is_empty() {
                             add_log_internal("stderr", &stderr_line, None, Some(&url)).ok();
                         }
@@ -684,8 +755,16 @@ pub async fn download_video(
                     }
                     CommandEvent::Terminated(status) => {
                         if CANCEL_FLAG.load(Ordering::SeqCst) {
-                            add_log_internal("info", "Download cancelled by user", None, Some(&url)).ok();
-                            return Err(BackendError::from_message("Download cancelled").to_wire_string());
+                            add_log_internal(
+                                "info",
+                                "Download cancelled by user",
+                                None,
+                                Some(&url),
+                            )
+                            .ok();
+                            return Err(
+                                BackendError::from_message("Download cancelled").to_wire_string()
+                            );
                         }
 
                         // Primary filepath source: read from --print-to-file temp file (UTF-8)
@@ -698,10 +777,11 @@ pub async fn download_video(
                         std::fs::remove_file(&filepath_tmp).ok();
 
                         if status.code == Some(0) {
-                            let actual_filesize = final_filepath.as_ref()
+                            let actual_filesize = final_filepath
+                                .as_ref()
                                 .and_then(|fp| std::fs::metadata(fp).ok())
                                 .map(|m| m.len());
-                            
+
                             let reported_filesize = actual_filesize.or_else(|| {
                                 if let Some(last_size) = current_stream_size {
                                     Some(total_filesize + last_size)
@@ -711,7 +791,7 @@ pub async fn download_video(
                                     None
                                 }
                             });
-                            
+
                             let display_title = current_title.clone().or_else(|| {
                                 final_filepath.as_ref().and_then(|path| {
                                     std::path::Path::new(path)
@@ -720,25 +800,37 @@ pub async fn download_video(
                                         .map(|s| s.to_string())
                                 })
                             });
-                            
+
                             // Log success
-                            let success_msg = format!("Downloaded: {}", display_title.clone().unwrap_or_else(|| "Unknown".to_string()));
+                            let success_msg = format!(
+                                "Downloaded: {}",
+                                display_title
+                                    .clone()
+                                    .unwrap_or_else(|| "Unknown".to_string())
+                            );
                             let details = format!(
                                 "Size: {} · Quality: {} · Format: {}",
-                                reported_filesize.map(format_size).unwrap_or_else(|| "Unknown".to_string()),
+                                reported_filesize
+                                    .map(format_size)
+                                    .unwrap_or_else(|| "Unknown".to_string()),
                                 quality_display.clone().unwrap_or_else(|| quality.clone()),
                                 format.clone()
                             );
-                            add_log_internal("success", &success_msg, Some(&details), Some(&url)).ok();
-                            
+                            add_log_internal("success", &success_msg, Some(&details), Some(&url))
+                                .ok();
+
                             // Save to history (update existing or create new)
-                            if let Some(ref filepath) = final_filepath {
+                            let progress_history_id = if let Some(ref filepath) = final_filepath {
                                 // Extract time range from download_sections (strip "*" prefix)
                                 let time_range = download_sections.as_ref().and_then(|s| {
                                     let stripped = s.strip_prefix('*').unwrap_or(s);
-                                    if stripped.is_empty() { None } else { Some(stripped.to_string()) }
+                                    if stripped.is_empty() {
+                                        None
+                                    } else {
+                                        Some(stripped.to_string())
+                                    }
                                 });
-                                
+
                                 if let Some(ref hist_id) = history_id {
                                     // Update existing history entry (re-download)
                                     update_history_download(
@@ -748,15 +840,20 @@ pub async fn download_video(
                                         quality_display.clone(),
                                         Some(format.clone()),
                                         time_range,
-                                    ).ok();
+                                    )
+                                    .ok();
+                                    Some(hist_id.clone())
                                 } else {
                                     // Create new history entry
                                     let src = source.clone().or_else(|| detect_source(&url));
-                                    let thumb = thumbnail.clone().or_else(|| generate_thumbnail_url(&url));
-                                    
+                                    let thumb =
+                                        thumbnail.clone().or_else(|| generate_thumbnail_url(&url));
+
                                     add_history_internal(
                                         url.clone(),
-                                        display_title.clone().unwrap_or_else(|| "Unknown".to_string()),
+                                        display_title
+                                            .clone()
+                                            .unwrap_or_else(|| "Unknown".to_string()),
                                         thumb,
                                         filepath.clone(),
                                         reported_filesize,
@@ -765,10 +862,13 @@ pub async fn download_video(
                                         Some(format.clone()),
                                         src,
                                         time_range,
-                                    ).ok();
+                                    )
+                                    .ok()
                                 }
-                            }
-                            
+                            } else {
+                                None
+                            };
+
                             let progress = DownloadProgress {
                                 id: id.clone(),
                                 percent: 100.0,
@@ -784,6 +884,8 @@ pub async fn download_video(
                                 error_message: None,
                                 error_code: None,
                                 error_params: None,
+                                history_id: progress_history_id,
+                                filepath: final_filepath.clone(),
                                 downloaded_size: None,
                                 elapsed_time: None,
                             };
@@ -793,7 +895,7 @@ pub async fn download_video(
                             let recent_lines: Vec<String> = recent_output.iter().cloned().collect();
                             let error = build_download_error_message(status.code, &recent_lines);
                             add_log_internal("error", error.message(), None, Some(&url)).ok();
-                            
+
                             // Emit error progress so frontend can display error message
                             let progress = DownloadProgress {
                                 id: id.clone(),
@@ -810,11 +912,13 @@ pub async fn download_video(
                                 error_message: Some(error.message().to_string()),
                                 error_code: Some(error.code().to_string()),
                                 error_params: error.params().cloned(),
+                                history_id: None,
+                                filepath: None,
                                 downloaded_size: None,
                                 elapsed_time: None,
                             };
                             app.emit("download-progress", progress).ok();
-                            
+
                             return Err(error.to_wire_string());
                         }
                     }
@@ -825,7 +929,12 @@ pub async fn download_video(
         }
         Err(_) => {
             if ytdlp_source == DependencySource::App {
-                return Err(BackendError::new(crate::types::code::YTDLP_APP_NOT_FOUND, "App-managed yt-dlp not found. Please install it from Settings > Dependencies.").with_retryable(false).to_wire_string());
+                return Err(BackendError::new(
+                    crate::types::code::YTDLP_APP_NOT_FOUND,
+                    "App-managed yt-dlp not found. Please install it from Settings > Dependencies.",
+                )
+                .with_retryable(false)
+                .to_wire_string());
             }
 
             // Fallback to system yt-dlp
@@ -834,11 +943,28 @@ pub async fn download_video(
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
             cmd.hide_window();
-            
-            let process = cmd.spawn()
-                .map_err(|e| BackendError::from_message(format!("Failed to start yt-dlp: {}", e)).to_wire_string())?;
-            
-            handle_tokio_download(app, id, process, quality, format, url, should_log_stderr, title, thumbnail, source, download_sections, filepath_tmp).await
+
+            let process = cmd.spawn().map_err(|e| {
+                BackendError::from_message(format!("Failed to start yt-dlp: {}", e))
+                    .to_wire_string()
+            })?;
+
+            handle_tokio_download(
+                app,
+                id,
+                process,
+                quality,
+                format,
+                url,
+                should_log_stderr,
+                title,
+                thumbnail,
+                source,
+                download_sections,
+                history_id.clone(),
+                filepath_tmp,
+            )
+            .await
         }
     }
 }
@@ -855,6 +981,7 @@ async fn handle_tokio_download(
     thumbnail: Option<String>,
     source: Option<String>,
     download_sections: Option<String>,
+    history_id: Option<String>,
     filepath_tmp: std::path::PathBuf,
 ) -> Result<(), String> {
     let stdout = process
@@ -863,7 +990,7 @@ async fn handle_tokio_download(
         .ok_or_else(|| BackendError::from_message("Failed to get stdout").to_wire_string())?;
     let stderr = process.stderr.take();
     let mut stdout_reader = BufReader::new(stdout);
-    
+
     // Only use frontend title if it's not a URL (placeholder)
     let mut current_title: Option<String> = title.filter(|t| !t.starts_with("http"));
     let mut current_index: Option<u32> = None;
@@ -886,7 +1013,7 @@ async fn handle_tokio_download(
         "best" => Some("Best".to_string()),
         _ => None,
     };
-    
+
     // Spawn task to read stderr in parallel (for live stream progress)
     let stderr_app = app.clone();
     let stderr_id = id.clone();
@@ -917,10 +1044,16 @@ async fn handle_tokio_download(
                 // On Windows, yt-dlp may print --print after_move:filepath to stderr.
                 // Capture it here as a fallback in case stdout doesn't contain the path.
                 let t = line.trim();
-                if !t.is_empty() && !t.starts_with('[')
-                    && (t.ends_with(".mp4") || t.ends_with(".mkv") || t.ends_with(".mp3")
-                        || t.ends_with(".m4a") || t.ends_with(".opus") || t.ends_with(".webm")
-                        || t.ends_with(".flac") || t.ends_with(".wav"))
+                if !t.is_empty()
+                    && !t.starts_with('[')
+                    && (t.ends_with(".mp4")
+                        || t.ends_with(".mkv")
+                        || t.ends_with(".mp3")
+                        || t.ends_with(".m4a")
+                        || t.ends_with(".opus")
+                        || t.ends_with(".webm")
+                        || t.ends_with(".flac")
+                        || t.ends_with(".wav"))
                 {
                     if let Ok(mut guard) = stderr_fp_clone.lock() {
                         *guard = Some(t.to_string());
@@ -941,7 +1074,9 @@ async fn handle_tokio_download(
                 }
 
                 // Parse progress from stderr (live streams output here)
-                if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&line) {
+                if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) =
+                    parse_progress(&line)
+                {
                     let progress = DownloadProgress {
                         id: stderr_id.clone(),
                         percent,
@@ -957,6 +1092,8 @@ async fn handle_tokio_download(
                         error_message: None,
                         error_code: None,
                         error_params: None,
+                        history_id: None,
+                        filepath: None,
                         downloaded_size,
                         elapsed_time,
                     };
@@ -972,7 +1109,7 @@ async fn handle_tokio_download(
     } else {
         None
     };
-    
+
     // Read stdout — use raw byte reading + decode_process_output to handle
     // non-UTF-8 encodings (e.g. GBK on Chinese Windows).
     let mut stdout_line_buf = Vec::new();
@@ -983,7 +1120,10 @@ async fn handle_tokio_download(
             Ok(_) => {}
             Err(_) => break,
         }
-        while stdout_line_buf.last().map_or(false, |&b| b == b'\n' || b == b'\r') {
+        while stdout_line_buf
+            .last()
+            .map_or(false, |&b| b == b'\n' || b == b'\r')
+        {
             stdout_line_buf.pop();
         }
         let line = decode_process_output(&stdout_line_buf);
@@ -994,12 +1134,18 @@ async fn handle_tokio_download(
             return Err(BackendError::from_message("Download cancelled").to_wire_string());
         }
         push_recent_output_shared(&recent_output, &line);
-        
+
         // Parse progress and emit events
-        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) = parse_progress(&line) {
-            if pi.is_some() { current_index = pi; }
-            if pc.is_some() { total_count = pc; }
-            
+        if let Some((percent, speed, eta, pi, pc, downloaded_size, elapsed_time)) =
+            parse_progress(&line)
+        {
+            if pi.is_some() {
+                current_index = pi;
+            }
+            if pc.is_some() {
+                total_count = pc;
+            }
+
             let progress = DownloadProgress {
                 id: id.clone(),
                 percent,
@@ -1015,15 +1161,19 @@ async fn handle_tokio_download(
                 error_message: None,
                 error_code: None,
                 error_params: None,
+                history_id: None,
+                filepath: None,
                 downloaded_size,
                 elapsed_time,
             };
             app.emit("download-progress", progress).ok();
         }
-        
+
         // Extract title from [download] messages
         // Handles both: "Destination: /path/file.mp4" and "/path/file.mp4 has already been downloaded"
-        if line.contains("[download]") && (line.contains("Destination:") || line.contains("has already been downloaded")) {
+        if line.contains("[download]")
+            && (line.contains("Destination:") || line.contains("has already been downloaded"))
+        {
             let path_sep = if line.contains('\\') { '\\' } else { '/' };
             if let Some(start) = line.rfind(path_sep) {
                 let filename = &line[start + 1..];
@@ -1034,15 +1184,19 @@ async fn handle_tokio_download(
                 }
             }
         }
-        
+
         // Capture final filepath
         let trimmed = line.trim();
         if !trimmed.is_empty()
             && !trimmed.starts_with('[')
-            && (trimmed.ends_with(".mp3") || trimmed.ends_with(".m4a")
-                || trimmed.ends_with(".opus") || trimmed.ends_with(".mp4")
-                || trimmed.ends_with(".mkv") || trimmed.ends_with(".webm")
-                || trimmed.ends_with(".flac") || trimmed.ends_with(".wav"))
+            && (trimmed.ends_with(".mp3")
+                || trimmed.ends_with(".m4a")
+                || trimmed.ends_with(".opus")
+                || trimmed.ends_with(".mp4")
+                || trimmed.ends_with(".mkv")
+                || trimmed.ends_with(".webm")
+                || trimmed.ends_with(".flac")
+                || trimmed.ends_with(".wav"))
         {
             final_filepath = Some(trimmed.to_string());
         }
@@ -1057,7 +1211,7 @@ async fn handle_tokio_download(
                 }
             }
         }
-        
+
         // Parse filesize
         if line.contains(" of ") && (line.contains("MiB") || line.contains("GiB")) {
             if let Some(re) = regex::Regex::new(r"of\s+(\d+(?:\.\d+)?)\s*(GiB|MiB|KiB)").ok() {
@@ -1082,7 +1236,7 @@ async fn handle_tokio_download(
             }
         }
     }
-    
+
     // Wait for stderr task to finish reading all lines.
     if let Some(task) = stderr_task {
         let _ = tokio::time::timeout(std::time::Duration::from_secs(5), task).await;
@@ -1091,10 +1245,9 @@ async fn handle_tokio_download(
     // Wait for process to fully exit before reading the temp file.
     // yt-dlp writes --print-to-file after_move:filepath near process exit;
     // reading before wait() can race and miss the path.
-    let status = process
-        .wait()
-        .await
-        .map_err(|e| BackendError::from_message(format!("Process error: {}", e)).to_wire_string())?;
+    let status = process.wait().await.map_err(|e| {
+        BackendError::from_message(format!("Process error: {}", e)).to_wire_string()
+    })?;
 
     // Primary filepath source: read from the --print-to-file temp file (UTF-8).
     // This is reliable on all platforms, especially Windows with non-UTF-8 locales
@@ -1118,10 +1271,11 @@ async fn handle_tokio_download(
     }
 
     if status.success() {
-        let actual_filesize = final_filepath.as_ref()
+        let actual_filesize = final_filepath
+            .as_ref()
             .and_then(|fp| std::fs::metadata(fp).ok())
             .map(|m| m.len());
-        
+
         let reported_filesize = actual_filesize.or_else(|| {
             if let Some(last_size) = current_stream_size {
                 Some(total_filesize + last_size)
@@ -1131,7 +1285,7 @@ async fn handle_tokio_download(
                 None
             }
         });
-        
+
         // Fallback: extract title from final_filepath if current_title is None
         let display_title = current_title.or_else(|| {
             final_filepath.as_ref().and_then(|path| {
@@ -1141,41 +1295,70 @@ async fn handle_tokio_download(
                     .map(|s| s.to_string())
             })
         });
-        
-        let success_msg = format!("Downloaded: {}", display_title.clone().unwrap_or_else(|| "Unknown".to_string()));
+
+        let success_msg = format!(
+            "Downloaded: {}",
+            display_title
+                .clone()
+                .unwrap_or_else(|| "Unknown".to_string())
+        );
         let details = format!(
             "Size: {} · Quality: {} · Format: {}",
-            reported_filesize.map(format_size).unwrap_or_else(|| "Unknown".to_string()),
+            reported_filesize
+                .map(format_size)
+                .unwrap_or_else(|| "Unknown".to_string()),
             quality_display.clone().unwrap_or_else(|| quality.clone()),
             format.clone()
         );
         add_log_internal("success", &success_msg, Some(&details), Some(&url)).ok();
-        
-        // Save to history
-        if let Some(ref filepath) = final_filepath {
-            let src = source.clone().or_else(|| detect_source(&url));
-            let thumb = thumbnail.clone().or_else(|| generate_thumbnail_url(&url));
-            
+
+        // Save to history (update existing or create new)
+        let progress_history_id = if let Some(ref filepath) = final_filepath {
             // Extract time range from download_sections (strip "*" prefix)
             let time_range = download_sections.as_ref().and_then(|s| {
                 let stripped = s.strip_prefix('*').unwrap_or(s);
-                if stripped.is_empty() { None } else { Some(stripped.to_string()) }
+                if stripped.is_empty() {
+                    None
+                } else {
+                    Some(stripped.to_string())
+                }
             });
-            
-            add_history_internal(
-                url.clone(),
-                display_title.clone().unwrap_or_else(|| "Unknown".to_string()),
-                thumb,
-                filepath.clone(),
-                reported_filesize,
-                None,
-                quality_display.clone(),
-                Some(format.clone()),
-                src,
-                time_range,
-            ).ok();
-        }
-        
+
+            if let Some(ref hist_id) = history_id {
+                update_history_download(
+                    hist_id.clone(),
+                    filepath.clone(),
+                    reported_filesize,
+                    quality_display.clone(),
+                    Some(format.clone()),
+                    time_range,
+                )
+                .ok();
+                Some(hist_id.clone())
+            } else {
+                let src = source.clone().or_else(|| detect_source(&url));
+                let thumb = thumbnail.clone().or_else(|| generate_thumbnail_url(&url));
+
+                add_history_internal(
+                    url.clone(),
+                    display_title
+                        .clone()
+                        .unwrap_or_else(|| "Unknown".to_string()),
+                    thumb,
+                    filepath.clone(),
+                    reported_filesize,
+                    None,
+                    quality_display.clone(),
+                    Some(format.clone()),
+                    src,
+                    time_range,
+                )
+                .ok()
+            }
+        } else {
+            None
+        };
+
         let progress = DownloadProgress {
             id: id.clone(),
             percent: 100.0,
@@ -1191,6 +1374,8 @@ async fn handle_tokio_download(
             error_message: None,
             error_code: None,
             error_params: None,
+            history_id: progress_history_id,
+            filepath: final_filepath.clone(),
             downloaded_size: None,
             elapsed_time: None,
         };
@@ -1200,7 +1385,7 @@ async fn handle_tokio_download(
         let recent_lines = recent_output_snapshot(&recent_output);
         let error = build_download_error_message(status.code(), &recent_lines);
         add_log_internal("error", error.message(), None, Some(&url)).ok();
-        
+
         // Emit error progress so frontend can display error message
         let progress = DownloadProgress {
             id: id.clone(),
@@ -1217,11 +1402,13 @@ async fn handle_tokio_download(
             error_message: Some(error.message().to_string()),
             error_code: Some(error.code().to_string()),
             error_params: error.params().cloned(),
+            history_id: None,
+            filepath: None,
             downloaded_size: None,
             elapsed_time: None,
         };
         app.emit("download-progress", progress).ok();
-        
+
         Err(error.to_wire_string())
     }
 }
@@ -1260,7 +1447,9 @@ fn generate_thumbnail_url(url: &str) -> Option<String> {
         let video_id = if url.contains("v=") {
             url.split("v=").nth(1).and_then(|s| s.split('&').next())
         } else if url.contains("youtu.be/") {
-            url.split("youtu.be/").nth(1).and_then(|s| s.split('?').next())
+            url.split("youtu.be/")
+                .nth(1)
+                .and_then(|s| s.split('?').next())
         } else {
             None
         };

@@ -9,17 +9,17 @@
 //! - `services`: Core services (yt-dlp, FFmpeg, Deno runtime)
 //! - `commands`: Tauri commands exposed to the frontend
 
-pub mod types;
-pub mod database;
-pub mod utils;
-pub mod services;
 pub mod commands;
+pub mod database;
+pub mod services;
+pub mod types;
+pub mod utils;
 
-use tauri::{Manager, Emitter};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Emitter, Manager};
 
 /// Whether to hide the dock icon when closing the window (macOS only)
 static HIDE_DOCK_ON_CLOSE: AtomicBool = AtomicBool::new(false);
@@ -109,13 +109,13 @@ pub fn run() {
             if let Err(e) = database::init_database(&app.handle()) {
                 log::error!("Failed to initialize database: {}", e);
             }
-            
+
             // Start background channel polling
             services::polling::start_polling(app.handle().clone());
-            
+
             // Setup system tray
             setup_tray(app)?;
-            
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -134,7 +134,9 @@ pub fn run() {
                 // macOS: optionally hide the dock icon too
                 #[cfg(target_os = "macos")]
                 if HIDE_DOCK_ON_CLOSE.load(Ordering::SeqCst) {
-                    let _ = window.app_handle().set_activation_policy(tauri::ActivationPolicy::Accessory);
+                    let _ = window
+                        .app_handle()
+                        .set_activation_policy(tauri::ActivationPolicy::Accessory);
                 }
             }
         })
@@ -186,6 +188,8 @@ pub fn run() {
             commands::get_history_count,
             commands::open_file_location,
             commands::check_file_exists,
+            commands::rename_downloaded_file,
+            commands::sync_history_renamed_entry,
             commands::update_summary,
             commands::add_summary_only_history,
             commands::open_macos_privacy_settings,
@@ -257,7 +261,8 @@ pub fn run() {
                 // (On Windows/Linux this event doesn't fire — users use the system tray instead)
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen {
-                    has_visible_windows, ..
+                    has_visible_windows,
+                    ..
                 } => {
                     if !has_visible_windows {
                         show_main_window(_app_handle);
@@ -330,7 +335,12 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         })
         .on_tray_icon_event(move |_tray, event| {
             // Left-click tray icon -> show/focus window
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
                 show_main_window(&app_handle);
             }
         })
@@ -415,7 +425,9 @@ fn tray_text(key: &str) -> &'static str {
     }
 }
 
-fn rebuild_tray_menu_inner(app_handle: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+fn rebuild_tray_menu_inner(
+    app_handle: &tauri::AppHandle,
+) -> Result<(), Box<dyn std::error::Error>> {
     let channels = database::get_followed_channels_db().unwrap_or_default();
     let channel_count = channels.len();
 
@@ -445,11 +457,15 @@ fn rebuild_tray_menu_inner(app_handle: &tauri::AppHandle) -> Result<(), Box<dyn 
     let built_submenu = submenu.build()?;
 
     // Build full menu
-    let check_now = MenuItemBuilder::with_id("check_now", tray_text("check_all")).build(app_handle)?;
+    let check_now =
+        MenuItemBuilder::with_id("check_now", tray_text("check_all")).build(app_handle)?;
     let settings = MenuItemBuilder::with_id("settings", tray_text("settings")).build(app_handle)?;
-    let check_update = MenuItemBuilder::with_id("check_update", tray_text("check_update")).build(app_handle)?;
+    let check_update =
+        MenuItemBuilder::with_id("check_update", tray_text("check_update")).build(app_handle)?;
     let show = MenuItemBuilder::with_id("show", tray_text("open")).build(app_handle)?;
-    let browser_extension = MenuItemBuilder::with_id("browser_extension", tray_text("browser_extension")).build(app_handle)?;
+    let browser_extension =
+        MenuItemBuilder::with_id("browser_extension", tray_text("browser_extension"))
+            .build(app_handle)?;
     let quit = MenuItemBuilder::with_id("quit", tray_text("quit")).build(app_handle)?;
 
     let menu = MenuBuilder::new(app_handle)

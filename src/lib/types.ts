@@ -112,6 +112,8 @@ export interface DownloadItem {
   completedFilesize?: number; // Actual file size after download
   completedResolution?: string; // e.g. "1920x1080"
   completedFormat?: string; // e.g. "mp4"
+  completedFilepath?: string; // Absolute path of downloaded file
+  completedHistoryId?: string; // Related history entry id after completion
   // Source detection
   extractor?: string; // e.g. "youtube", "tiktok", "instagram"
   // Settings snapshot when item was added to queue
@@ -188,6 +190,8 @@ export interface DownloadProgress {
   error_message?: string;
   error_code?: string;
   error_params?: Record<string, string | number | boolean>;
+  history_id?: string; // Related history entry id when available
+  filepath?: string; // Final file path when status is 'finished'
   // For live streams (no percentage available)
   downloaded_size?: string; // e.g. "2.87 MiB"
   elapsed_time?: string; // e.g. "00:00:07"

@@ -62,6 +62,7 @@ export function UniversalPage({ onNavigateToSettings }: UniversalPageProps) {
     clearCookieError,
     retryFailedDownload,
     updateItemTimeRange,
+    renameCompletedItem,
   } = useUniversal();
 
   const { ffmpegStatus } = useDependencies();
@@ -151,6 +152,7 @@ export function UniversalPage({ onNavigateToSettings }: UniversalPageProps) {
             isDownloading={isDownloading}
             onRemove={removeItem}
             onUpdateTimeRange={updateItemTimeRange}
+            onRename={renameCompletedItem}
             onClearCompleted={clearCompleted}
           />
         </div>

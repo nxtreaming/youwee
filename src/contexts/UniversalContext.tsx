@@ -256,9 +256,16 @@ interface UniversalContextType {
   retryFailedDownload: (itemId: string) => void;
   // Per-item time range
   updateItemTimeRange: (id: string, start?: string, end?: string) => void;
+  // Rename completed file
+  renameCompletedItem: (id: string, newName: string) => Promise<void>;
 }
 
 const UniversalContext = createContext<UniversalContextType | null>(null);
+
+interface RenameDownloadedFileResult {
+  newFilepath: string;
+  newTitle: string;
+}
 
 export function UniversalProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<DownloadItem[]>([]);
@@ -410,6 +417,8 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
                       completedFilesize: progress.filesize,
                       completedResolution: progress.resolution,
                       completedFormat: progress.format_ext,
+                      completedFilepath: progress.filepath,
+                      completedHistoryId: progress.history_id,
                     }
                   : {}),
               }
@@ -639,6 +648,47 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
         };
       }),
     );
+  }, []);
+
+  const renameCompletedItem = useCallback(async (id: string, newName: string) => {
+    const item = itemsRef.current.find((i) => i.id === id);
+    if (!item || item.status !== 'completed') {
+      throw new Error('Only completed items can be renamed');
+    }
+
+    const filepath = item.completedFilepath;
+    if (!filepath) {
+      throw new Error('File path is not available for this item');
+    }
+
+    try {
+      const result = await invoke<RenameDownloadedFileResult>('rename_downloaded_file', {
+        filepath,
+        newName,
+        historyId: item.completedHistoryId || null,
+      });
+      if (item.completedHistoryId) {
+        await invoke('sync_history_renamed_entry', {
+          id: item.completedHistoryId,
+          filepath: result.newFilepath,
+          title: result.newTitle,
+        });
+      }
+
+      setItems((currentItems) =>
+        currentItems.map((currentItem) =>
+          currentItem.id === id
+            ? {
+                ...currentItem,
+                title: result.newTitle,
+                completedFilepath: result.newFilepath,
+              }
+            : currentItem,
+        ),
+      );
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : String(error));
+    }
   }, []);
 
   const clearAll = useCallback(() => {
@@ -986,6 +1036,7 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
     retryFailedDownload,
     // Per-item time range
     updateItemTimeRange,
+    renameCompletedItem,
   };
 
   return <UniversalContext.Provider value={value}>{children}</UniversalContext.Provider>;

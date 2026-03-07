@@ -99,6 +99,11 @@
       "retrying": "Thử lại {{current}}/{{total}} sau {{seconds}}s"
     },
     "summarize": "Tóm tắt",
+    "rename": "Đổi tên",
+    "renamePlaceholder": "Nhập tên file mới",
+    "renameSave": "Lưu",
+    "renameCancel": "Hủy",
+    "renameFailed": "Đổi tên file thất bại",
     "fetchingTranscript": "Đang lấy phụ đề...",
     "generating": "Đang tạo...",
     "showMore": "Xem thêm",

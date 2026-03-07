@@ -8,6 +8,7 @@ import {
   Lightbulb,
   Loader2,
   MonitorPlay,
+  Pencil,
   Play,
   RefreshCw,
   Scissors,
@@ -97,6 +98,7 @@ interface UniversalQueueItemProps {
   disabled?: boolean;
   onRemove: (id: string) => void;
   onUpdateTimeRange: (id: string, start?: string, end?: string) => void;
+  onRename: (id: string, newName: string) => Promise<void>;
 }
 
 export function UniversalQueueItem({
@@ -105,6 +107,7 @@ export function UniversalQueueItem({
   disabled,
   onRemove,
   onUpdateTimeRange,
+  onRename,
 }: UniversalQueueItemProps) {
   const { t } = useTranslation('universal');
   const ai = useAI();
@@ -113,6 +116,10 @@ export function UniversalQueueItem({
   const [showTimeRange, setShowTimeRange] = useState(false);
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
+  const [showRenameEditor, setShowRenameEditor] = useState(false);
+  const [renameName, setRenameName] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
   const handleThumbError = useCallback(() => {
     setThumbError(true);
   }, []);
@@ -175,6 +182,33 @@ export function UniversalQueueItem({
   const handleTimeEndChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setTimeEnd(autoFormatTimeInput(e.target.value));
   }, []);
+
+  const handleOpenRenameEditor = useCallback(() => {
+    setRenameName(item.title);
+    setRenameError(null);
+    setShowRenameEditor(true);
+  }, [item.title]);
+
+  const handleCancelRename = useCallback(() => {
+    setShowRenameEditor(false);
+    setRenameError(null);
+    setRenameName('');
+  }, []);
+
+  const handleRenameSubmit = useCallback(async () => {
+    if (isRenaming) return;
+
+    setIsRenaming(true);
+    setRenameError(null);
+    try {
+      await onRename(item.id, renameName);
+      setShowRenameEditor(false);
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : t('queue.renameFailed'));
+    } finally {
+      setIsRenaming(false);
+    }
+  }, [isRenaming, item.id, onRename, renameName, t]);
 
   // Compute duration info and validation
   const durationSeconds = useMemo(
@@ -507,6 +541,17 @@ export function UniversalQueueItem({
                 {t('queue.summarize')}
               </button>
             )}
+
+            {isCompleted && item.completedFilepath && (
+              <button
+                type="button"
+                onClick={handleOpenRenameEditor}
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground hover:bg-muted/50 transition-colors font-medium"
+              >
+                <Pencil className="w-3 h-3" />
+                {t('queue.rename')}
+              </button>
+            )}
           </div>
         )}
 
@@ -565,6 +610,8 @@ export function UniversalQueueItem({
           </div>
         )}
 
+        {renameError && <p className="mt-1 text-xs text-destructive">{renameError}</p>}
+
         {/* Time Range Inline Panel */}
         {showTimeRange && isPending && (
           <div className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
@@ -622,6 +669,35 @@ export function UniversalQueueItem({
                 {t('queue.timeRange.clear')}
               </button>
             )}
+          </div>
+        )}
+
+        {showRenameEditor && isCompleted && (
+          <div className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-muted/50 border border-border/50">
+            <Pencil className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <input
+              type="text"
+              value={renameName}
+              onChange={(e) => setRenameName(e.target.value)}
+              placeholder={t('queue.renamePlaceholder')}
+              className="flex-1 h-7 text-xs px-2 py-1 rounded bg-background border border-border/50 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50"
+            />
+            <button
+              type="button"
+              onClick={handleRenameSubmit}
+              disabled={isRenaming}
+              className="text-[11px] px-2 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 font-medium transition-colors disabled:opacity-50"
+            >
+              {isRenaming ? <Loader2 className="w-3 h-3 animate-spin" /> : t('queue.renameSave')}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelRename}
+              disabled={isRenaming}
+              className="text-[11px] px-2 py-0.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 font-medium transition-colors disabled:opacity-50"
+            >
+              {t('queue.renameCancel')}
+            </button>
           </div>
         )}
       </div>

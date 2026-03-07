@@ -68,6 +68,44 @@ pub fn update_history_download(
     Ok(())
 }
 
+/// Update history filepath + title by old filepath (used after file rename)
+pub fn update_history_filepath_and_title(
+    old_filepath: String,
+    new_filepath: String,
+    new_title: String,
+) -> Result<(), String> {
+    let conn = get_db()?;
+    let rows = conn
+        .execute(
+        "UPDATE history SET filepath = ?1, title = ?2 WHERE filepath = ?3",
+        params![new_filepath, new_title, old_filepath],
+    )
+        .map_err(|e| format!("Failed to update history filepath/title: {}", e))?;
+    if rows == 0 {
+        return Err("No history entry matched this filepath".to_string());
+    }
+    Ok(())
+}
+
+/// Update history filepath + title by history entry ID (preferred when available)
+pub fn update_history_filepath_and_title_by_id(
+    id: String,
+    new_filepath: String,
+    new_title: String,
+) -> Result<(), String> {
+    let conn = get_db()?;
+    let rows = conn
+        .execute(
+            "UPDATE history SET filepath = ?1, title = ?2 WHERE id = ?3",
+            params![new_filepath, new_title, id],
+        )
+        .map_err(|e| format!("Failed to update history filepath/title by id: {}", e))?;
+    if rows == 0 {
+        return Err("History entry not found".to_string());
+    }
+    Ok(())
+}
+
 /// Add a history entry with summary (for videos summarized without downloading)
 pub fn add_history_with_summary(
     url: String,

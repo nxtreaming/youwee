@@ -130,6 +130,11 @@
       "retrying": "Retry {{current}}/{{total}} in {{seconds}}s"
     },
     "summarize": "Summarize",
+    "rename": "Rename",
+    "renamePlaceholder": "Enter new file name",
+    "renameSave": "Save",
+    "renameCancel": "Cancel",
+    "renameFailed": "Failed to rename file",
     "fetchingTranscript": "Fetching transcript...",
     "generating": "Generating...",
     "showMore": "Show more",

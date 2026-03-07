@@ -31,6 +31,7 @@ interface HistoryContextType {
   clearHistory: () => Promise<void>;
   openFileLocation: (filepath: string) => Promise<void>;
   checkFileExists: (filepath: string) => Promise<boolean>;
+  renameEntry: (entryId: string, newName: string) => Promise<void>;
   redownload: (entry: HistoryEntry) => Promise<void>;
   getRedownloadTask: (entryId: string) => RedownloadTask | undefined;
 }
@@ -38,6 +39,11 @@ interface HistoryContextType {
 const HistoryContext = createContext<HistoryContextType | null>(null);
 
 const MAX_HISTORY_KEY = 'youwee_max_history';
+
+interface RenameDownloadedFileResult {
+  newFilepath: string;
+  newTitle: string;
+}
 
 export function HistoryProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
@@ -161,6 +167,43 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, []);
+
+  const renameEntry = useCallback(
+    async (entryId: string, newName: string) => {
+      const entry = entries.find((e) => e.id === entryId);
+      if (!entry) {
+        throw new Error('History entry not found');
+      }
+      if (!entry.filepath) {
+        throw new Error('File path is not available for this entry');
+      }
+
+      const result = await invoke<RenameDownloadedFileResult>('rename_downloaded_file', {
+        filepath: entry.filepath,
+        newName,
+        historyId: entry.id,
+      });
+      await invoke('sync_history_renamed_entry', {
+        id: entry.id,
+        filepath: result.newFilepath,
+        title: result.newTitle,
+      });
+
+      setEntries((prev) =>
+        prev.map((item) =>
+          item.id === entryId
+            ? {
+                ...item,
+                title: result.newTitle,
+                filepath: result.newFilepath,
+                file_exists: true,
+              }
+            : item,
+        ),
+      );
+    },
+    [entries],
+  );
 
   const redownload = useCallback(
     async (entry: HistoryEntry) => {
@@ -396,6 +439,7 @@ export function HistoryProvider({ children }: { children: ReactNode }) {
         clearHistory,
         openFileLocation,
         checkFileExists,
+        renameEntry,
         redownload,
         getRedownloadTask,
       }}
