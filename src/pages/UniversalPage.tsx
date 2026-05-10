@@ -9,6 +9,7 @@ import {
   UniversalUrlInput,
 } from '@/components/download';
 import { FFmpegRequiredDialog } from '@/components/FFmpegRequiredDialog';
+import { FreshCookieRequiredDialog } from '@/components/FreshCookieRequiredDialog';
 import { ThemePicker } from '@/components/settings/ThemePicker';
 import { Button } from '@/components/ui/button';
 import { useDependencies } from '@/contexts/DependenciesContext';
@@ -279,6 +280,14 @@ export function UniversalPage({ onNavigateToSettings }: UniversalPageProps) {
       {(() => {
         const itemId = cookieError?.itemId;
         if (!cookieError?.show || !itemId) return null;
+        if (cookieError.kind === 'fresh_cookies') {
+          return (
+            <FreshCookieRequiredDialog
+              onDismiss={clearCookieError}
+              onGoToSettings={onNavigateToSettings}
+            />
+          );
+        }
         return (
           <BrowserCookieErrorDialog
             browserName={loadCookieSettings().browser}

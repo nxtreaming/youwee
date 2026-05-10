@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **4K WebM post-processing** - Fixed WebM downloads selecting MP4/H.264-compatible streams that could make FFmpeg fail during post-processing conversion
 - **Channel browse capped at 50 videos** - Fixed channel and playlist browsing incorrectly stopping at 50 videos when more items were available
+- **Cookie error dialog classification** - Fixed fresh-login cookie requirements being shown as a browser DB lock error, and now route DB-lock vs authenticated-cookie issues to different dialogs
 
 ## [0.13.0] - 2026-04-15
 
