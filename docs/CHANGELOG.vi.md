@@ -17,11 +17,16 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Thêm mới
 - **Nhà cung cấp AI LM Studio** - Thêm LM Studio làm nhà cung cấp AI nội bộ tương thích OpenAI, có endpoint local tùy chỉnh và không yêu cầu khóa API
+- **Phân trang video kênh với Tải thêm** - Trang Kênh giờ tải mặc định 100 video đầu tiên và cho phép tải thêm theo từng đợt trong cả màn hình duyệt và màn hình chi tiết
+- **Hỗ trợ tiếng Thái** - Bổ sung bản địa hóa đầy đủ tiếng Thái cho toàn bộ ứng dụng, bao gồm màn hình giao diện, cài đặt, công cụ phụ đề, luồng tải xuống và bộ chọn ngôn ngữ
+- **Hỗ trợ tiếng Ả Rập** - Bổ sung bản địa hóa đầy đủ tiếng Ả Rập cho toàn bộ ứng dụng, bao gồm màn hình giao diện, cài đặt, công cụ phụ đề, luồng tải xuống, đồng thời thêm xử lý hướng chữ RTL
 
 ### Thay đổi
 
 ### Sửa lỗi
 - **Hậu xử lý WebM 4K** - Sửa lỗi tải WebM có thể chọn nhầm stream tương thích MP4/H.264 khiến FFmpeg thất bại ở bước post-processing conversion
+- **Giới hạn duyệt kênh ở 50 video** - Sửa lỗi duyệt kênh và playlist bị dừng sai ở 50 video dù vẫn còn thêm video
+- **Phân loại sai dialog lỗi cookie** - Sửa lỗi yêu cầu cookie đăng nhập mới bị hiển thị nhầm như lỗi khóa DB cookie của trình duyệt; giờ app tách riêng dialog cho lỗi DB lock và lỗi cần cookie xác thực
 
 ## [0.13.0] - 2026-04-15
 

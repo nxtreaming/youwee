@@ -166,11 +166,13 @@
   },
   "languages": {
     "en": "English",
+    "ar": "Arabic",
     "vi": "Vietnamese",
     "ja": "Japanese",
     "ko": "Korean",
     "zh-Hans": "Chinese (Simplified)",
     "zh-Hant": "Chinese (Traditional)",
+    "th": "Thai",
     "es": "Spanish",
     "fr": "French",
     "de": "German",

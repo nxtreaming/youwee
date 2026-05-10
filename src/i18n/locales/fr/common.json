@@ -20,11 +20,13 @@
   },
   "language": {
     "en": "English",
+    "ar": "Arabe",
     "vi": "Tiếng Việt",
     "zh-CN": "简体中文",
     "fr": "Français",
     "pt": "Português",
     "ru": "Russe",
+    "th": "Thaï",
     "label": "Langue",
     "select": "Choisir la langue"
   },

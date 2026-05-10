@@ -1,6 +1,15 @@
 import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
+import arChannels from './locales/ar/channels.json';
+import arCommon from './locales/ar/common.json';
+import arDownload from './locales/ar/download.json';
+import arGallery from './locales/ar/gallery.json';
+import arMetadata from './locales/ar/metadata.json';
+import arPages from './locales/ar/pages.json';
+import arSettings from './locales/ar/settings.json';
+import arSubtitles from './locales/ar/subtitles.json';
+import arUniversal from './locales/ar/universal.json';
 import enChannels from './locales/en/channels.json';
 // Import translations
 import enCommon from './locales/en/common.json';
@@ -39,6 +48,15 @@ import ruPages from './locales/ru/pages.json';
 import ruSettings from './locales/ru/settings.json';
 import ruSubtitles from './locales/ru/subtitles.json';
 import ruUniversal from './locales/ru/universal.json';
+import thChannels from './locales/th/channels.json';
+import thCommon from './locales/th/common.json';
+import thDownload from './locales/th/download.json';
+import thGallery from './locales/th/gallery.json';
+import thMetadata from './locales/th/metadata.json';
+import thPages from './locales/th/pages.json';
+import thSettings from './locales/th/settings.json';
+import thSubtitles from './locales/th/subtitles.json';
+import thUniversal from './locales/th/universal.json';
 import viChannels from './locales/vi/channels.json';
 import viCommon from './locales/vi/common.json';
 import viDownload from './locales/vi/download.json';
@@ -59,6 +77,17 @@ import zhCNSubtitles from './locales/zh-CN/subtitles.json';
 import zhCNUniversal from './locales/zh-CN/universal.json';
 
 const resources = {
+  ar: {
+    common: arCommon,
+    channels: arChannels,
+    download: arDownload,
+    gallery: arGallery,
+    metadata: arMetadata,
+    universal: arUniversal,
+    pages: arPages,
+    settings: arSettings,
+    subtitles: arSubtitles,
+  },
   en: {
     common: enCommon,
     channels: enChannels,
@@ -125,7 +154,28 @@ const resources = {
     settings: ruSettings,
     subtitles: ruSubtitles,
   },
+  th: {
+    common: thCommon,
+    channels: thChannels,
+    download: thDownload,
+    gallery: thGallery,
+    metadata: thMetadata,
+    universal: thUniversal,
+    pages: thPages,
+    settings: thSettings,
+    subtitles: thSubtitles,
+  },
 };
+
+const RTL_LANGUAGES = new Set(['ar']);
+
+function applyDocumentLanguage(language: string) {
+  if (typeof document === 'undefined') return;
+
+  const baseLanguage = language.toLowerCase().split('-')[0];
+  document.documentElement.lang = language;
+  document.documentElement.dir = RTL_LANGUAGES.has(baseLanguage) ? 'rtl' : 'ltr';
+}
 
 i18n
   .use(LanguageDetector)
@@ -155,5 +205,8 @@ i18n
       escapeValue: false,
     },
   });
+
+applyDocumentLanguage(i18n.resolvedLanguage || i18n.language || 'en');
+i18n.on('languageChanged', applyDocumentLanguage);
 
 export default i18n;

@@ -275,7 +275,7 @@ interface DownloadContextType {
   updateSponsorBlockMode: (mode: SponsorBlockMode) => void;
   updateSponsorBlockCategory: (category: SponsorBlockCategory, action: SponsorBlockAction) => void;
   // Cookie error detection
-  cookieError: { show: boolean; itemId?: string } | null;
+  cookieError: { show: boolean; itemId?: string; kind: 'db_locked' | 'fresh_cookies' } | null;
   clearCookieError: () => void;
   retryFailedDownload: (itemId: string) => void;
   // Per-item time range
@@ -291,7 +291,11 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isExpandingPlaylist, setIsExpandingPlaylist] = useState(false);
-  const [cookieError, setCookieError] = useState<{ show: boolean; itemId?: string } | null>(null);
+  const [cookieError, setCookieError] = useState<{
+    show: boolean;
+    itemId?: string;
+    kind: 'db_locked' | 'fresh_cookies';
+  } | null>(null);
 
   // Load saved settings on init
   const [settings, setSettings] = useState<DownloadSettings>(() => {
@@ -454,15 +458,16 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       }
 
       // Detect cookie error on Windows (lock error or DPAPI/App-Bound Encryption)
-      const cookieErrorPattern =
+      const cookieDbLockedPattern =
         /could not copy.*cookie|permission denied.*cookies|cookie.*database|failed to.*cookie|failed to decrypt.*dpapi|app.bound.encryption/i;
-      const cookieErrorCodes = new Set(['YT_COOKIE_DB_LOCKED', 'YT_FRESH_COOKIES_REQUIRED']);
-      if (
+      if (progress.status === 'error' && progress.error_code === 'YT_FRESH_COOKIES_REQUIRED') {
+        setCookieError({ show: true, itemId: progress.id, kind: 'fresh_cookies' });
+      } else if (
         progress.status === 'error' &&
-        ((progress.error_code && cookieErrorCodes.has(progress.error_code)) ||
-          (progress.error_message && cookieErrorPattern.test(progress.error_message)))
+        ((progress.error_code && progress.error_code === 'YT_COOKIE_DB_LOCKED') ||
+          (progress.error_message && cookieDbLockedPattern.test(progress.error_message)))
       ) {
-        setCookieError({ show: true, itemId: progress.id });
+        setCookieError({ show: true, itemId: progress.id, kind: 'db_locked' });
       }
 
       setItems((currentItems) =>

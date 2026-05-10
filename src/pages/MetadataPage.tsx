@@ -361,11 +361,13 @@ export function MetadataPage() {
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         'en',
+                        'ar',
                         'vi',
                         'ja',
                         'ko',
                         'zh-Hans',
                         'zh-Hant',
+                        'th',
                         'es',
                         'fr',
                         'de',

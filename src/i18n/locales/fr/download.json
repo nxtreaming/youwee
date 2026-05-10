@@ -160,11 +160,13 @@
   },
   "languages": {
     "en": "Anglais",
+    "ar": "Arabe",
     "vi": "Vietnamien",
     "ja": "Japonais",
     "ko": "Coréen",
     "zh-Hans": "Chinois (simplifié)",
     "zh-Hant": "Chinois (traditionnel)",
+    "th": "Thaï",
     "es": "Espagnol",
     "fr": "Français",
     "de": "Allemand",
