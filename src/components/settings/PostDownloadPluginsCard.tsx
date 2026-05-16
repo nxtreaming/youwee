@@ -3,19 +3,22 @@ import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
   Braces,
+  ChevronDown,
   Download,
   FolderOpen,
-  Link2,
+  Info,
   PackageOpen,
   Plus,
   RefreshCw,
   ShieldCheck,
   TerminalSquare,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PluginLogsDialog } from '@/components/settings/PluginLogsDialog';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -42,7 +45,7 @@ import { cn } from '@/lib/utils';
 import { SettingsCard } from './SettingsSection';
 
 type InstallPluginSourceInput = {
-  kind: 'app-scaffold' | 'local-folder' | 'local-zip' | 'remote-url';
+  kind: 'app-scaffold' | 'local-folder' | 'local-zip';
   value: string;
 };
 
@@ -105,6 +108,44 @@ function summarizeCompatibility(
   return entries;
 }
 
+function formatPluginIdentifier(pluginId: string, slug: string) {
+  const shortId = pluginId.slice(0, 8);
+  return `${shortId} • ${slug}`;
+}
+
+function formatChecksum(checksum: string) {
+  if (checksum.length <= 20) return checksum;
+  return `${checksum.slice(0, 8)}...${checksum.slice(-8)}`;
+}
+
+function formatSourceKind(
+  kind: PluginSummary['installation']['source']['kind'] | PluginPackageInspection['source']['kind'],
+  t: (key: string, opts?: Record<string, unknown>) => string,
+) {
+  switch (kind) {
+    case 'app-scaffold':
+      return t('download.pluginSourceAppScaffold');
+    case 'local-folder':
+      return t('download.pluginSourceLocalFolder');
+    case 'local-zip':
+      return t('download.pluginSourceLocalZip');
+    case 'remote-url':
+      return t('download.pluginSourceRemoteUrl');
+    default:
+      return kind;
+  }
+}
+
+function formatRuntimeStatusBadge(
+  status: string | undefined,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+) {
+  if (status === 'running') return t('download.pluginStatusRunning');
+  if (status === 'success') return t('download.pluginStatusSuccess');
+  if (status === 'error') return t('download.pluginStatusError');
+  return status;
+}
+
 export function PostDownloadPluginsCard() {
   const { t } = useTranslation('settings');
   const [plugins, setPlugins] = useState<PluginSummary[]>([]);
@@ -116,11 +157,14 @@ export function PostDownloadPluginsCard() {
   const [creating, setCreating] = useState(false);
   const [inspecting, setInspecting] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [runtimeGuideOpen, setRuntimeGuideOpen] = useState(false);
+  const [expandedPluginId, setExpandedPluginId] = useState<string | null>(null);
   const [newPluginName, setNewPluginName] = useState('');
   const [newPluginSlug, setNewPluginSlug] = useState('');
-  const [importUrl, setImportUrl] = useState('');
   const [inspection, setInspection] = useState<PluginPackageInspection | null>(null);
   const [installSource, setInstallSource] = useState<InstallPluginSourceInput | null>(null);
+  const [installAcknowledged, setInstallAcknowledged] = useState(false);
   const [envDrafts, setEnvDrafts] = useState<Record<string, string>>({});
   const [runtimeStatuses, setRuntimeStatuses] = useState<
     Record<string, { status: string; message?: string | null }>
@@ -231,6 +275,7 @@ export function PostDownloadPluginsCard() {
       const result = await invoke<PluginPackageInspection>(command, { [key]: source.value });
       setInspection(result);
       setInstallSource(source);
+      setInstallAcknowledged(false);
     } catch (err) {
       console.error('Failed to inspect plugin package:', err);
       setError(localizeUnknownError(err));
@@ -262,12 +307,6 @@ export function PostDownloadPluginsCard() {
     await inspectSource({ kind: 'local-zip', value: selected }, 'inspect_plugin_zip', 'path');
   };
 
-  const handleInspectUrl = async () => {
-    const trimmed = importUrl.trim();
-    if (!trimmed) return;
-    await inspectSource({ kind: 'remote-url', value: trimmed }, 'inspect_plugin_url', 'url');
-  };
-
   const handleInstallInspection = async () => {
     if (!inspection || !installSource) return;
     setInstalling(true);
@@ -275,11 +314,11 @@ export function PostDownloadPluginsCard() {
     try {
       await invoke<PluginSummary>('install_plugin', {
         source: installSource,
-        trusted: false,
+        trusted: true,
       });
       setInspection(null);
       setInstallSource(null);
-      setImportUrl('');
+      setInstallAcknowledged(false);
       await loadPlugins();
     } catch (err) {
       console.error('Failed to install plugin:', err);
@@ -305,29 +344,6 @@ export function PostDownloadPluginsCard() {
     } catch (err) {
       console.error('Failed to update plugin state:', err);
       setError(t('download.pluginStateError'));
-    }
-  };
-
-  const handleSetTrust = async (plugin: PluginSummary, trusted: boolean) => {
-    try {
-      await invoke('set_plugin_trust', { pluginId: plugin.manifest.pluginId, trusted });
-      updatePluginList((items) =>
-        items.map((item) =>
-          item.manifest.pluginId === plugin.manifest.pluginId
-            ? {
-                ...item,
-                installation: {
-                  ...item.installation,
-                  trusted,
-                  enabled: trusted ? item.installation.enabled : false,
-                },
-              }
-            : item,
-        ),
-      );
-    } catch (err) {
-      console.error('Failed to update plugin trust:', err);
-      setError(t('download.pluginTrustError'));
     }
   };
 
@@ -371,10 +387,11 @@ export function PostDownloadPluginsCard() {
       });
       setNewPluginName('');
       setNewPluginSlug('');
+      setCreateOpen(false);
       await loadPlugins();
     } catch (err) {
       console.error('Failed to create plugin:', err);
-      setError(t('download.pluginCreateError'));
+      setError(localizeUnknownError(err));
     } finally {
       setCreating(false);
     }
@@ -386,6 +403,25 @@ export function PostDownloadPluginsCard() {
     } catch (err) {
       console.error('Failed to open plugin directory:', err);
       setError(t('download.pluginOpenDirError'));
+    }
+  };
+
+  const handleRefreshPlugin = async (pluginId: string) => {
+    try {
+      const refreshed = await invoke<PluginSummary>('get_plugin_details', { pluginId });
+      updatePluginList((items) =>
+        items.map((item) => (item.manifest.pluginId === pluginId ? refreshed : item)),
+      );
+      setRuntimeStatuses((current) => ({
+        ...current,
+        [pluginId]: {
+          status: refreshed.installation.lastExecutionStatus ?? current[pluginId]?.status ?? 'idle',
+          message: refreshed.installation.lastError ?? current[pluginId]?.message ?? null,
+        },
+      }));
+    } catch (err) {
+      console.error('Failed to refresh plugin details:', err);
+      setError(localizeUnknownError(err));
     }
   };
 
@@ -501,9 +537,11 @@ export function PostDownloadPluginsCard() {
     selectedPluginId != null
       ? (plugins.find((plugin) => plugin.manifest.pluginId === selectedPluginId) ?? null)
       : null;
-  const inspectionCompatibilityEntries = inspection
-    ? summarizeCompatibility(inspection.manifest.compatibility, t)
-    : [];
+
+  const inspectionCompatibilityEntries = useMemo(
+    () => (inspection ? summarizeCompatibility(inspection.manifest.compatibility, t) : []),
+    [inspection, t],
+  );
 
   const loadPluginLogs = useCallback(
     async (pluginId: string) => {
@@ -533,161 +571,50 @@ export function PostDownloadPluginsCard() {
 
   return (
     <>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-dashed"
+          onClick={() => setRuntimeGuideOpen(true)}
+        >
+          <Info className="h-4 w-4" />
+          {t('download.pluginRuntimeGuideButton')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-dashed"
+          onClick={handleImportFolder}
+          disabled={inspecting}
+        >
+          <FolderOpen className="h-4 w-4" />
+          {t('download.pluginImportFolder')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-dashed"
+          onClick={handleImportZip}
+          disabled={inspecting}
+        >
+          <PackageOpen className="h-4 w-4" />
+          {t('download.pluginImportZip')}
+        </Button>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4" />
+          {t('download.pluginCreate')}
+        </Button>
+      </div>
+
       <SettingsCard className="space-y-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-purple-500/10 p-2 text-purple-500">
-                <Braces className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">{t('download.pluginsTitle')}</p>
-                <p className="text-xs text-muted-foreground">{t('download.pluginsDesc')}</p>
-              </div>
-            </div>
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium">{t('download.pluginsTitle')}</p>
           <Button variant="outline" size="sm" onClick={loadPlugins} disabled={loading}>
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
             {t('download.pluginReload')}
           </Button>
         </div>
-
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-          <div className="rounded-xl border border-border/60 bg-background/40 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Plus className="h-4 w-4" />
-              <span>{t('download.pluginCreate')}</span>
-            </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <Input
-                value={newPluginName}
-                onChange={(event) => setNewPluginName(event.target.value)}
-                placeholder={t('download.pluginNamePlaceholder')}
-              />
-              <Input
-                value={newPluginSlug}
-                onChange={(event) => setNewPluginSlug(event.target.value)}
-                placeholder={t('download.pluginSlugPlaceholder')}
-              />
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">{t('download.pluginCreateHelp')}</p>
-            <div className="mt-3">
-              <Button onClick={handleCreatePlugin} disabled={creating || !newPluginName.trim()}>
-                <Plus className="h-4 w-4" />
-                {creating ? t('download.pluginCreating') : t('download.pluginCreate')}
-              </Button>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-border/60 bg-background/40 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <PackageOpen className="h-4 w-4" />
-              <span>{t('download.pluginImportTitle')}</span>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={handleImportFolder}>
-                <FolderOpen className="h-4 w-4" />
-                {t('download.pluginImportFolder')}
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleImportZip}>
-                <PackageOpen className="h-4 w-4" />
-                {t('download.pluginImportZip')}
-              </Button>
-            </div>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={importUrl}
-                onChange={(event) => setImportUrl(event.target.value)}
-                placeholder={t('download.pluginImportUrlPlaceholder')}
-              />
-              <Button
-                variant="outline"
-                onClick={handleInspectUrl}
-                disabled={inspecting || !importUrl.trim()}
-              >
-                <Link2 className="h-4 w-4" />
-                {t('download.pluginInspect')}
-              </Button>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">{t('download.pluginImportHelp')}</p>
-          </div>
-        </div>
-
-        {providers.length > 0 && (
-          <div className="rounded-xl border border-border/60 bg-background/40 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Download className="h-4 w-4" />
-              <span>{t('download.pluginRuntimeTitle')}</span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">{t('download.pluginRuntimeDesc')}</p>
-
-            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              {(['javascript', 'python'] as PluginRuntimeLanguage[]).map((language) => {
-                const allowedProviders = providers.filter((provider) =>
-                  language === 'javascript'
-                    ? provider.provider === 'deno' ||
-                      provider.provider === 'node' ||
-                      provider.provider === 'bun'
-                    : provider.provider === 'python',
-                );
-                if (allowedProviders.length === 0) return null;
-                return (
-                  <div key={language} className="rounded-lg border border-border/60 px-3 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-medium">{LANGUAGE_LABELS[language]}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {t('download.pluginRuntimeDefault')}
-                        </p>
-                      </div>
-                      <Select
-                        value={defaultProviders[language] ?? allowedProviders[0].provider}
-                        onValueChange={(value) =>
-                          handleSetDefaultProvider(language, value as PluginProvider)
-                        }
-                      >
-                        <SelectTrigger className="h-8 w-[140px] text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allowedProviders.map((provider) => (
-                            <SelectItem
-                              key={`${language}-${provider.provider}`}
-                              value={provider.provider}
-                              className="text-xs"
-                            >
-                              {PROVIDER_LABELS[provider.provider]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {providers.map((provider) => (
-                <span
-                  key={provider.provider}
-                  className={cn(
-                    'rounded px-2 py-1 text-[11px]',
-                    provider.available
-                      ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                  )}
-                >
-                  {PROVIDER_LABELS[provider.provider]}:{' '}
-                  {provider.available
-                    ? t('download.pluginRuntimeAvailable')
-                    : t('download.pluginRuntimeMissing')}
-                  {provider.resolvedSource ? ` (${provider.resolvedSource})` : ''}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
 
         {error && <p className="text-xs text-destructive">{error}</p>}
 
@@ -710,9 +637,7 @@ export function PostDownloadPluginsCard() {
                 <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
                   <span>{inspection.manifest.pluginId}</span>
                   <span>•</span>
-                  <span>{inspection.source.kind}</span>
-                  <span>•</span>
-                  <span>{inspection.source.value}</span>
+                  <span>{formatSourceKind(inspection.source.kind, t)}</span>
                 </div>
                 <div className="space-y-1 text-[11px] text-muted-foreground">
                   <p className="font-medium text-foreground/80">
@@ -736,12 +661,41 @@ export function PostDownloadPluginsCard() {
                     ))}
                   </div>
                 )}
+                <div className="rounded-lg border border-border/60 bg-background/60 px-3 py-3">
+                  <label className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={installAcknowledged}
+                      onChange={(event) => setInstallAcknowledged(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border"
+                    />
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-foreground">
+                        {t('download.pluginInstallConfirmLabel')}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t('download.pluginInstallConfirmHelp')}
+                      </p>
+                    </div>
+                  </label>
+                </div>
               </div>
+
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setInspection(null)} disabled={installing}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setInspection(null);
+                    setInstallAcknowledged(false);
+                  }}
+                  disabled={installing}
+                >
                   {t('download.pluginDismiss')}
                 </Button>
-                <Button onClick={handleInstallInspection} disabled={installing}>
+                <Button
+                  onClick={handleInstallInspection}
+                  disabled={installing || !installAcknowledged}
+                >
                   <Download className="h-4 w-4" />
                   {installing ? t('download.pluginInstalling') : t('download.pluginInstall')}
                 </Button>
@@ -756,12 +710,6 @@ export function PostDownloadPluginsCard() {
           <div className="rounded-xl border border-dashed border-border/70 bg-background/40 px-4 py-6 text-center">
             <p className="text-sm font-medium">{t('download.pluginEmptyTitle')}</p>
             <p className="mt-1 text-xs text-muted-foreground">{t('download.pluginEmptyDesc')}</p>
-            <div className="mt-3">
-              <Button variant="outline" size="sm" onClick={loadPlugins}>
-                <RefreshCw className="h-4 w-4" />
-                {t('download.pluginReload')}
-              </Button>
-            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -771,113 +719,88 @@ export function PostDownloadPluginsCard() {
               const selectedProvider = currentProvider(plugin);
               const supportedProviders = plugin.manifest.runtime.supportedProviders;
               const runtimeStatus = runtimeStatuses[plugin.manifest.pluginId];
+              const isExpanded = expandedPluginId === plugin.manifest.pluginId;
+              const providerSummary = `${PROVIDER_LABELS[selectedProvider]} / ${LANGUAGE_LABELS[plugin.manifest.runtime.language]}`;
+
               return (
-                <div
+                <Collapsible
                   key={plugin.manifest.pluginId}
-                  className="rounded-xl border border-border/60 bg-background/60 p-4"
+                  open={isExpanded}
+                  onOpenChange={(open) =>
+                    setExpandedPluginId(open ? plugin.manifest.pluginId : null)
+                  }
                 >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold">{plugin.manifest.name}</p>
-                        <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                          v{plugin.manifest.version}
-                        </span>
-                        <span className="rounded bg-blue-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                          {LANGUAGE_LABELS[plugin.manifest.runtime.language]}
-                        </span>
-                        <span
-                          className={cn(
-                            'rounded px-2 py-0.5 text-[10px] uppercase tracking-wide',
-                            plugin.installation.trusted
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                          )}
+                  <div className="rounded-xl border border-border/60 bg-background/60">
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
                         >
-                          {plugin.installation.trusted
-                            ? t('download.pluginTrusted')
-                            : t('download.pluginUntrusted')}
-                        </span>
-                        {runtimeStatus?.status && (
-                          <span
+                          <div className="rounded-xl bg-purple-500/10 p-2 text-purple-500">
+                            <Braces className="h-4 w-4" />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-semibold">
+                                {plugin.manifest.name}
+                              </p>
+                              <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                v{plugin.manifest.version}
+                              </span>
+                              {runtimeStatus?.status && (
+                                <span
+                                  className={cn(
+                                    'rounded px-2 py-0.5 text-[10px] uppercase tracking-wide',
+                                    runtimeStatus.status === 'running' &&
+                                      'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+                                    runtimeStatus.status === 'success' &&
+                                      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+                                    runtimeStatus.status === 'error' &&
+                                      'bg-red-500/10 text-red-600 dark:text-red-400',
+                                  )}
+                                >
+                                  {formatRuntimeStatusBadge(runtimeStatus.status, t)}
+                                </span>
+                              )}
+                              {plugin.warnings.length > 0 && (
+                                <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                                  {t('download.pluginWarningCount', {
+                                    count: plugin.warnings.length,
+                                  })}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                              <span>{providerSummary}</span>
+                              <span>
+                                {t('download.pluginTimeout', {
+                                  seconds: plugin.manifest.timeoutSec,
+                                })}
+                              </span>
+                              <span>
+                                {requestedPermissions.length > 0
+                                  ? t('download.pluginPermissionSummary', {
+                                      count: requestedPermissions.length,
+                                    })
+                                  : t('download.pluginNoExtraPermissions')}
+                              </span>
+                            </div>
+                          </div>
+
+                          <ChevronDown
                             className={cn(
-                              'rounded px-2 py-0.5 text-[10px] uppercase tracking-wide',
-                              runtimeStatus.status === 'running' &&
-                                'bg-sky-500/10 text-sky-600 dark:text-sky-400',
-                              runtimeStatus.status === 'success' &&
-                                'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-                              runtimeStatus.status === 'error' &&
-                                'bg-red-500/10 text-red-600 dark:text-red-400',
+                              'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                              isExpanded && 'rotate-180',
                             )}
-                          >
-                            {runtimeStatus.status === 'running'
-                              ? t('download.pluginStatusRunning')
-                              : runtimeStatus.status === 'success'
-                                ? t('download.pluginStatusSuccess')
-                                : runtimeStatus.status === 'error'
-                                  ? t('download.pluginStatusError')
-                                  : runtimeStatus.status}
-                          </span>
-                        )}
-                      </div>
+                          />
+                        </button>
+                      </CollapsibleTrigger>
 
-                      <p className="text-xs text-muted-foreground">
-                        {plugin.manifest.description || t('download.pluginNoDescription')}
-                      </p>
-
-                      <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                        <span>{plugin.manifest.pluginId}</span>
-                        <span>•</span>
-                        <span>{plugin.manifest.slug}</span>
-                        <span>•</span>
-                        <span>{plugin.manifest.runtime.entrypoint}</span>
-                        <span>•</span>
-                        <span>
-                          {t('download.pluginTimeout', { seconds: plugin.manifest.timeoutSec })}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {supportedProviders.map((provider) => (
-                          <span
-                            key={`${plugin.manifest.pluginId}-${provider}`}
-                            className="rounded bg-muted px-2 py-1 text-[11px] text-muted-foreground"
-                          >
-                            {PROVIDER_LABELS[provider]}
-                          </span>
-                        ))}
-                        {plugin.warnings.map((warning) => (
-                          <span
-                            key={`${plugin.manifest.pluginId}-${warning}`}
-                            className="rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600 dark:text-amber-400"
-                          >
-                            {warning}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2 lg:items-end">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenPluginLogs(plugin.manifest.pluginId)}
-                        >
-                          <TerminalSquare className="h-4 w-4" />
-                          {t('download.pluginViewLogs')}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenPluginDirectory(plugin.manifest.pluginId)}
-                        >
-                          <FolderOpen className="h-4 w-4" />
-                          {t('download.pluginOpenFolder')}
-                        </Button>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-3">
+                        <span className="hidden text-xs text-muted-foreground sm:inline">
                           {plugin.installation.enabled
                             ? t('download.pluginEnabled')
                             : t('download.pluginDisabled')}
@@ -888,308 +811,485 @@ export function PostDownloadPluginsCard() {
                         />
                       </div>
                     </div>
-                  </div>
 
-                  <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                    <div className="rounded-xl bg-muted/30 p-3">
-                      <div className="flex items-center gap-2 text-xs font-medium">
-                        <ShieldCheck className="h-4 w-4 text-amber-500" />
-                        <span>{t('download.pluginTrustTitle')}</span>
-                      </div>
-                      <p className="mt-2 text-[11px] text-muted-foreground">
-                        {t('download.pluginTrustDesc')}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-                        <span className="text-xs">{t('download.pluginTrustToggle')}</span>
-                        <Switch
-                          checked={plugin.installation.trusted}
-                          onCheckedChange={(trusted) => handleSetTrust(plugin, trusted)}
-                        />
-                      </div>
-                      <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
-                        <p>
-                          {t('download.pluginSourceLabel')}: {plugin.installation.source.kind}
-                        </p>
-                        <p className="break-all">
-                          {t('download.pluginSourceValueLabel')}: {plugin.installation.source.value}
-                        </p>
-                        {plugin.installation.source.checksum && (
-                          <p className="break-all">
-                            {t('download.pluginChecksumLabel')}:{' '}
-                            {plugin.installation.source.checksum}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl bg-muted/30 p-3">
-                      <div className="flex items-center gap-2 text-xs font-medium">
-                        <PackageOpen className="h-4 w-4 text-blue-500" />
-                        <span>{t('download.pluginProviderTitle')}</span>
-                      </div>
-                      <p className="mt-2 text-[11px] text-muted-foreground">
-                        {t('download.pluginProviderDesc')}
-                      </p>
-                      <div className="mt-3">
-                        <Select
-                          value={selectedProvider}
-                          onValueChange={(value) =>
-                            handleSetPluginProvider(plugin, value as PluginProvider)
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {supportedProviders.map((provider) => (
-                              <SelectItem key={provider} value={provider} className="text-xs">
-                                {PROVIDER_LABELS[provider]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
-                        {plugin.installation.lastResolvedProvider && (
-                          <p>
-                            {t('download.pluginLastResolvedProvider')}:{' '}
-                            {PROVIDER_LABELS[plugin.installation.lastResolvedProvider]}
-                          </p>
-                        )}
-                        {plugin.installation.lastResolvedSource && (
-                          <p>
-                            {t('download.pluginLastResolvedSource')}:{' '}
-                            {plugin.installation.lastResolvedSource}
-                          </p>
-                        )}
-                        {plugin.installation.lastExecutionStatus && (
-                          <p>
-                            {t('download.pluginLastExecutionStatus')}:{' '}
-                            {plugin.installation.lastExecutionStatus}
-                          </p>
-                        )}
-                        {(runtimeStatus?.status === 'error' || plugin.installation.lastError) && (
-                          <p className="text-destructive">
-                            {t('download.pluginLastError')}:{' '}
-                            {runtimeStatus?.status === 'error'
-                              ? runtimeStatus.message
-                              : plugin.installation.lastError}
-                          </p>
-                        )}
-                        {runtimeStatus?.status === 'running' && (
-                          <p className="text-sky-600 dark:text-sky-400">
-                            {t('download.pluginRunningNow')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-xl bg-muted/30 p-3">
-                    <div className="flex items-center gap-2 text-xs font-medium">
-                      <Braces className="h-4 w-4 text-purple-500" />
-                      <span>{t('download.pluginCompatibilityTitle')}</span>
-                    </div>
-                    <p className="mt-2 text-[11px] text-muted-foreground">
-                      {t('download.pluginCompatibilityDesc')}
-                    </p>
-                    <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
-                      {compatibilityEntries.length > 0 ? (
-                        compatibilityEntries.map((entry) => <p key={entry}>{entry}</p>)
-                      ) : (
-                        <p>{t('download.pluginCompatibilityNone')}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-xl bg-muted/30 p-3">
-                    <div className="flex items-center gap-2 text-xs font-medium">
-                      <ShieldCheck className="h-4 w-4 text-amber-500" />
-                      <span>{t('download.pluginPermissionsTitle')}</span>
-                    </div>
-
-                    {requestedPermissions.length === 0 ? (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {t('download.pluginNoExtraPermissions')}
-                      </p>
-                    ) : (
-                      <div className="mt-3 space-y-2">
-                        <p className="text-xs text-muted-foreground">
-                          {t('download.pluginRequestedPermissions')}
-                        </p>
+                    <CollapsibleContent className="border-t border-border/60 px-4 py-4">
+                      <div className="space-y-4">
                         <div className="flex flex-wrap gap-2">
-                          {requestedPermissions.map((permission) => (
-                            <span
-                              key={permission}
-                              className="rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600 dark:text-amber-400"
-                            >
-                              {permission}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-3 grid gap-2 md:grid-cols-2">
-                      {[
-                        {
-                          key: 'network' as const,
-                          label: t('download.pluginPermissionNetwork'),
-                          enabled: plugin.manifest.permissions.network,
-                          approved: plugin.installation.approvedPermissions.network,
-                        },
-                        {
-                          key: 'readPaths' as const,
-                          label: t('download.pluginPermissionReadPaths'),
-                          enabled: plugin.manifest.permissions.readPaths.length > 0,
-                          approved: plugin.installation.approvedPermissions.readPaths,
-                        },
-                        {
-                          key: 'writePaths' as const,
-                          label: t('download.pluginPermissionWritePaths'),
-                          enabled: plugin.manifest.permissions.writePaths.length > 0,
-                          approved: plugin.installation.approvedPermissions.writePaths,
-                        },
-                        {
-                          key: 'env' as const,
-                          label: t('download.pluginPermissionEnv'),
-                          enabled: plugin.manifest.permissions.env.length > 0,
-                          approved: plugin.installation.approvedPermissions.env,
-                        },
-                      ].map((permission) => (
-                        <div
-                          key={permission.key}
-                          className={cn(
-                            'flex items-center justify-between rounded-lg border border-border/60 px-3 py-2',
-                            !permission.enabled && 'opacity-50',
-                          )}
-                        >
-                          <span className="text-xs">{permission.label}</span>
-                          <Switch
-                            checked={permission.enabled && permission.approved}
-                            disabled={!permission.enabled}
-                            onCheckedChange={(checked) =>
-                              handleApprovePermissions(plugin, {
-                                ...plugin.installation.approvedPermissions,
-                                [permission.key]: checked,
-                              })
-                            }
-                          />
-                        </div>
-                      ))}
-                    </div>
-
-                    {(plugin.manifest.permissions.readPaths.length > 0 ||
-                      plugin.manifest.permissions.writePaths.length > 0 ||
-                      plugin.manifest.permissions.env.length > 0) && (
-                      <div className="mt-3 space-y-2 text-[11px] text-muted-foreground">
-                        {plugin.manifest.permissions.readPaths.length > 0 && (
-                          <p>
-                            {t('download.pluginPermissionReadPathsLabel')}:{' '}
-                            {plugin.manifest.permissions.readPaths.join(', ')}
-                          </p>
-                        )}
-                        {plugin.manifest.permissions.writePaths.length > 0 && (
-                          <p>
-                            {t('download.pluginPermissionWritePathsLabel')}:{' '}
-                            {plugin.manifest.permissions.writePaths.join(', ')}
-                          </p>
-                        )}
-                        {plugin.manifest.permissions.env.length > 0 && (
-                          <p>
-                            {t('download.pluginPermissionEnvLabel')}:{' '}
-                            {plugin.manifest.permissions.env.join(', ')}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {plugin.manifest.permissions.env.length > 0 && (
-                      <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium">{t('download.pluginEnvTitle')}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {t('download.pluginEnvDesc')}
-                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRefreshPlugin(plugin.manifest.pluginId)}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            {t('download.pluginRefreshInfo')}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenPluginLogs(plugin.manifest.pluginId)}
+                          >
+                            <TerminalSquare className="h-4 w-4" />
+                            {t('download.pluginViewLogs')}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenPluginDirectory(plugin.manifest.pluginId)}
+                          >
+                            <FolderOpen className="h-4 w-4" />
+                            {t('download.pluginOpenFolder')}
+                          </Button>
                         </div>
 
-                        {plugin.manifest.permissions.env.map((envKey) => {
-                          const isSet = plugin.installation.envValueStatus[envKey] ?? false;
-                          const draftValue = getEnvDraftValue(plugin.manifest.pluginId, envKey);
-                          const isSecret =
-                            envKey.includes('TOKEN') ||
-                            envKey.includes('SECRET') ||
-                            envKey.includes('KEY') ||
-                            envKey.includes('PASSWORD');
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="rounded-xl bg-muted/30 p-3">
+                            <div className="flex items-center gap-2 text-xs font-medium">
+                              <PackageOpen className="h-4 w-4 text-purple-500" />
+                              <span>{t('download.pluginPackageTitle')}</span>
+                            </div>
+                            <p className="mt-2 text-[11px] text-muted-foreground">
+                              {t('download.pluginPackageDesc')}
+                            </p>
+                            <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
+                              <p>
+                                {t('download.pluginIdentifierLabel')}:{' '}
+                                {formatPluginIdentifier(
+                                  plugin.manifest.pluginId,
+                                  plugin.manifest.slug,
+                                )}
+                              </p>
+                              <p>
+                                {t('download.pluginSourceLabel')}:{' '}
+                                {formatSourceKind(plugin.installation.source.kind, t)}
+                              </p>
+                              {plugin.manifest.author && (
+                                <p>
+                                  {t('download.pluginAuthorLabel')}: {plugin.manifest.author}
+                                </p>
+                              )}
+                              <p className="break-all">
+                                {t('download.pluginLocationLabel')}:{' '}
+                                {plugin.installation.source.value}
+                              </p>
+                              {plugin.installation.source.checksum && (
+                                <p className="break-all">
+                                  {t('download.pluginChecksumLabel')}:{' '}
+                                  {formatChecksum(plugin.installation.source.checksum)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
 
-                          return (
-                            <div
-                              key={`${plugin.manifest.pluginId}-${envKey}`}
-                              className="rounded-lg border border-border/60 px-3 py-3"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-xs font-medium">{envKey}</p>
+                          <div className="rounded-xl bg-muted/30 p-3">
+                            <div className="flex items-center gap-2 text-xs font-medium">
+                              <PackageOpen className="h-4 w-4 text-blue-500" />
+                              <span>{t('download.pluginProviderTitle')}</span>
+                            </div>
+                            <p className="mt-2 text-[11px] text-muted-foreground">
+                              {t('download.pluginProviderDesc')}
+                            </p>
+                            <div className="mt-3">
+                              <Select
+                                value={selectedProvider}
+                                onValueChange={(value) =>
+                                  handleSetPluginProvider(plugin, value as PluginProvider)
+                                }
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {supportedProviders.map((provider) => (
+                                    <SelectItem key={provider} value={provider} className="text-xs">
+                                      {PROVIDER_LABELS[provider]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
+                              {plugin.installation.lastResolvedProvider && (
+                                <p>
+                                  {t('download.pluginLastResolvedProvider')}:{' '}
+                                  {PROVIDER_LABELS[plugin.installation.lastResolvedProvider]}
+                                </p>
+                              )}
+                              {plugin.installation.lastResolvedSource && (
+                                <p>
+                                  {t('download.pluginLastResolvedSource')}:{' '}
+                                  {plugin.installation.lastResolvedSource}
+                                </p>
+                              )}
+                              {plugin.installation.lastExecutionStatus && (
+                                <p>
+                                  {t('download.pluginLastExecutionStatus')}:{' '}
+                                  {plugin.installation.lastExecutionStatus}
+                                </p>
+                              )}
+                              {(runtimeStatus?.status === 'error' ||
+                                plugin.installation.lastError) && (
+                                <p className="text-destructive">
+                                  {t('download.pluginLastError')}:{' '}
+                                  {runtimeStatus?.status === 'error'
+                                    ? runtimeStatus.message
+                                    : plugin.installation.lastError}
+                                </p>
+                              )}
+                              {runtimeStatus?.status === 'running' && (
+                                <p className="text-sky-600 dark:text-sky-400">
+                                  {t('download.pluginRunningNow')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl bg-muted/30 p-3">
+                          <div className="flex items-center gap-2 text-xs font-medium">
+                            <Braces className="h-4 w-4 text-purple-500" />
+                            <span>{t('download.pluginCompatibilityTitle')}</span>
+                          </div>
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            {t('download.pluginCompatibilityDesc')}
+                          </p>
+                          <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
+                            {compatibilityEntries.length > 0 ? (
+                              compatibilityEntries.map((entry) => <p key={entry}>{entry}</p>)
+                            ) : (
+                              <p>{t('download.pluginCompatibilityNone')}</p>
+                            )}
+                          </div>
+                          {plugin.warnings.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {plugin.warnings.map((warning) => (
                                 <span
-                                  className={cn(
-                                    'rounded px-2 py-0.5 text-[10px]',
-                                    isSet
-                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                                  )}
+                                  key={`${plugin.manifest.pluginId}-${warning}`}
+                                  className="rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600 dark:text-amber-400"
                                 >
-                                  {isSet
-                                    ? t('download.pluginEnvValueSet')
-                                    : t('download.pluginEnvValueMissing')}
+                                  {warning}
                                 </span>
-                              </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
 
-                              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                                <Input
-                                  type={isSecret ? 'password' : 'text'}
-                                  value={draftValue}
-                                  onChange={(event) =>
-                                    setEnvDraftValue(
-                                      plugin.manifest.pluginId,
-                                      envKey,
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder={
-                                    isSet
-                                      ? t('download.pluginEnvReplacePlaceholder')
-                                      : t('download.pluginEnvValuePlaceholder')
-                                  }
-                                />
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleSavePluginEnv(plugin, envKey)}
-                                    disabled={!draftValue.trim()}
+                        <div className="rounded-xl bg-muted/30 p-3">
+                          <div className="flex items-center gap-2 text-xs font-medium">
+                            <ShieldCheck className="h-4 w-4 text-amber-500" />
+                            <span>{t('download.pluginPermissionsTitle')}</span>
+                          </div>
+
+                          {requestedPermissions.length === 0 ? (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              {t('download.pluginNoExtraPermissions')}
+                            </p>
+                          ) : (
+                            <div className="mt-3 space-y-2">
+                              <p className="text-xs text-muted-foreground">
+                                {t('download.pluginRequestedPermissions')}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {requestedPermissions.map((permission) => (
+                                  <span
+                                    key={permission}
+                                    className="rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600 dark:text-amber-400"
                                   >
-                                    {t('download.pluginEnvSave')}
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleClearPluginEnv(plugin, envKey)}
-                                    disabled={!isSet}
-                                  >
-                                    {t('download.pluginEnvClear')}
-                                  </Button>
-                                </div>
+                                    {permission}
+                                  </span>
+                                ))}
                               </div>
                             </div>
-                          );
-                        })}
+                          )}
+
+                          <div className="mt-3 grid gap-2 md:grid-cols-2">
+                            {[
+                              {
+                                key: 'network' as const,
+                                label: t('download.pluginPermissionNetwork'),
+                                enabled: plugin.manifest.permissions.network,
+                                approved: plugin.installation.approvedPermissions.network,
+                              },
+                              {
+                                key: 'readPaths' as const,
+                                label: t('download.pluginPermissionReadPaths'),
+                                enabled: plugin.manifest.permissions.readPaths.length > 0,
+                                approved: plugin.installation.approvedPermissions.readPaths,
+                              },
+                              {
+                                key: 'writePaths' as const,
+                                label: t('download.pluginPermissionWritePaths'),
+                                enabled: plugin.manifest.permissions.writePaths.length > 0,
+                                approved: plugin.installation.approvedPermissions.writePaths,
+                              },
+                              {
+                                key: 'env' as const,
+                                label: t('download.pluginPermissionEnv'),
+                                enabled: plugin.manifest.permissions.env.length > 0,
+                                approved: plugin.installation.approvedPermissions.env,
+                              },
+                            ].map((permission) => (
+                              <div
+                                key={permission.key}
+                                className={cn(
+                                  'flex items-center justify-between rounded-lg border border-border/60 px-3 py-2',
+                                  !permission.enabled && 'opacity-50',
+                                )}
+                              >
+                                <span className="text-xs">{permission.label}</span>
+                                <Switch
+                                  checked={permission.enabled && permission.approved}
+                                  disabled={!permission.enabled}
+                                  onCheckedChange={(checked) =>
+                                    handleApprovePermissions(plugin, {
+                                      ...plugin.installation.approvedPermissions,
+                                      [permission.key]: checked,
+                                    })
+                                  }
+                                />
+                              </div>
+                            ))}
+                          </div>
+
+                          {(plugin.manifest.permissions.readPaths.length > 0 ||
+                            plugin.manifest.permissions.writePaths.length > 0 ||
+                            plugin.manifest.permissions.env.length > 0) && (
+                            <div className="mt-3 space-y-2 text-[11px] text-muted-foreground">
+                              {plugin.manifest.permissions.readPaths.length > 0 && (
+                                <p>
+                                  {t('download.pluginPermissionReadPathsLabel')}:{' '}
+                                  {plugin.manifest.permissions.readPaths.join(', ')}
+                                </p>
+                              )}
+                              {plugin.manifest.permissions.writePaths.length > 0 && (
+                                <p>
+                                  {t('download.pluginPermissionWritePathsLabel')}:{' '}
+                                  {plugin.manifest.permissions.writePaths.join(', ')}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {plugin.manifest.permissions.env.length > 0 && (
+                            <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
+                              <div className="space-y-1">
+                                <p className="text-xs font-medium">
+                                  {t('download.pluginEnvTitle')}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {t('download.pluginEnvDesc')}
+                                </p>
+                              </div>
+
+                              {plugin.manifest.permissions.env.map((envKey) => {
+                                const isSet = plugin.installation.envValueStatus[envKey] ?? false;
+                                const draftValue = getEnvDraftValue(
+                                  plugin.manifest.pluginId,
+                                  envKey,
+                                );
+                                const isSecret =
+                                  envKey.includes('TOKEN') ||
+                                  envKey.includes('SECRET') ||
+                                  envKey.includes('KEY') ||
+                                  envKey.includes('PASSWORD');
+
+                                return (
+                                  <div
+                                    key={`${plugin.manifest.pluginId}-${envKey}`}
+                                    className="rounded-lg border border-border/60 px-3 py-3"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <p className="text-xs font-medium">{envKey}</p>
+                                      <span
+                                        className={cn(
+                                          'rounded px-2 py-0.5 text-[10px]',
+                                          isSet
+                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                                        )}
+                                      >
+                                        {isSet
+                                          ? t('download.pluginEnvValueSet')
+                                          : t('download.pluginEnvValueMissing')}
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                                      <Input
+                                        type={isSecret ? 'password' : 'text'}
+                                        value={draftValue}
+                                        onChange={(event) =>
+                                          setEnvDraftValue(
+                                            plugin.manifest.pluginId,
+                                            envKey,
+                                            event.target.value,
+                                          )
+                                        }
+                                        placeholder={
+                                          isSet
+                                            ? t('download.pluginEnvReplacePlaceholder')
+                                            : t('download.pluginEnvValuePlaceholder')
+                                        }
+                                      />
+                                      <div className="flex gap-2">
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleSavePluginEnv(plugin, envKey)}
+                                          disabled={!draftValue.trim()}
+                                        >
+                                          {t('download.pluginEnvSave')}
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleClearPluginEnv(plugin, envKey)}
+                                          disabled={!isSet}
+                                        >
+                                          {t('download.pluginEnvClear')}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
+                    </CollapsibleContent>
                   </div>
-                </div>
+                </Collapsible>
               );
             })}
           </div>
         )}
       </SettingsCard>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>{t('download.pluginCreateDialogTitle')}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t('download.pluginCreateDialogDesc')}</p>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('download.pluginCreateNameLabel')}</p>
+              <Input
+                value={newPluginName}
+                onChange={(event) => setNewPluginName(event.target.value)}
+                placeholder={t('download.pluginNamePlaceholder')}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('download.pluginCreateSlugLabel')}</p>
+              <Input
+                value={newPluginSlug}
+                onChange={(event) => setNewPluginSlug(event.target.value)}
+                placeholder={t('download.pluginSlugPlaceholder')}
+              />
+            </div>
+
+            <p className="text-xs text-muted-foreground">{t('download.pluginCreateHelp')}</p>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
+                {t('download.pluginDismiss')}
+              </Button>
+              <Button onClick={handleCreatePlugin} disabled={creating || !newPluginName.trim()}>
+                <Plus className="h-4 w-4" />
+                {creating ? t('download.pluginCreating') : t('download.pluginCreate')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={runtimeGuideOpen} onOpenChange={setRuntimeGuideOpen}>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>{t('download.pluginRuntimeGuideTitle')}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t('download.pluginRuntimeGuideDesc')}</p>
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              {(['javascript', 'python'] as PluginRuntimeLanguage[]).map((language) => {
+                const allowedProviders = providers.filter((provider) =>
+                  language === 'javascript'
+                    ? provider.provider === 'deno' ||
+                      provider.provider === 'node' ||
+                      provider.provider === 'bun'
+                    : provider.provider === 'python',
+                );
+                if (allowedProviders.length === 0) return null;
+
+                return (
+                  <div key={language} className="rounded-xl border border-border/60 p-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">{LANGUAGE_LABELS[language]}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t('download.pluginRuntimeDefault')}
+                      </p>
+                    </div>
+
+                    <div className="mt-3">
+                      <Select
+                        value={defaultProviders[language] ?? allowedProviders[0].provider}
+                        onValueChange={(value) =>
+                          handleSetDefaultProvider(language, value as PluginProvider)
+                        }
+                      >
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allowedProviders.map((provider) => (
+                            <SelectItem
+                              key={`${language}-${provider.provider}`}
+                              value={provider.provider}
+                              className="text-xs"
+                            >
+                              {PROVIDER_LABELS[provider.provider]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {providers.map((provider) => (
+                <span
+                  key={provider.provider}
+                  className={cn(
+                    'rounded px-2 py-1 text-[11px]',
+                    provider.available
+                      ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                  )}
+                >
+                  {PROVIDER_LABELS[provider.provider]}:{' '}
+                  {provider.available
+                    ? t('download.pluginRuntimeAvailable')
+                    : t('download.pluginRuntimeMissing')}
+                  {provider.resolvedSource ? ` (${provider.resolvedSource})` : ''}
+                </span>
+              ))}
+            </div>
+
+            <div className="rounded-xl bg-muted/30 p-3 text-[11px] text-muted-foreground">
+              <p>{t('download.pluginRuntimeGuideNotePrimary')}</p>
+              <p className="mt-1">{t('download.pluginRuntimeGuideNoteSecondary')}</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <PluginLogsDialog
         open={logsOpen}

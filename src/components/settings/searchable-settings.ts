@@ -106,7 +106,7 @@ export const SEARCHABLE_SETTINGS: SearchableSetting[] = [
     section: 'download',
   },
   {
-    id: 'post-download-plugins',
+    id: 'plugins-manager',
     labelKey: 'plugins.title',
     descriptionKey: 'plugins.description',
     keywords: [

@@ -1170,9 +1170,6 @@ pub fn update_plugin_state_internal(
         .installations
         .get_mut(plugin_id)
         .ok_or_else(|| format!("Plugin not found: {}", plugin_id))?;
-    if enabled && !entry.trusted {
-        return Err("Plugin must be trusted before enabling".to_string());
-    }
     entry.enabled = enabled;
     write_registry(app, &registry)
 }
@@ -1714,10 +1711,6 @@ async fn execute_plugin(
     run_id: &str,
     payload: &PostDownloadPluginPayload,
 ) -> Result<(PluginExecutionResult, PluginProvider, Option<String>), String> {
-    if !plugin.installation.trusted {
-        return Err("Plugin is not trusted".to_string());
-    }
-
     let selected_provider = plugin
         .installation
         .selected_provider

@@ -13,10 +13,8 @@ export function PluginsSection({ highlightId }: PluginsSectionProps) {
   return (
     <div className="space-y-8">
       <div
-        id="post-download-plugins"
-        className={
-          highlightId === 'post-download-plugins' ? 'rounded-2xl ring-2 ring-primary/30' : ''
-        }
+        id="plugins-manager"
+        className={highlightId === 'plugins-manager' ? 'rounded-2xl ring-2 ring-primary/30' : ''}
       >
         <SettingsSection
           title={t('plugins.title')}
