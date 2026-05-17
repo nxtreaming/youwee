@@ -237,7 +237,7 @@ export interface PluginCompatibilitySpec {
 }
 
 export interface PluginManifest {
-  pluginId: string;
+  id: string;
   slug: string;
   name: string;
   version: string;
@@ -268,6 +268,7 @@ export interface PluginInstallation {
   trusted: boolean;
   approvedPermissions: PluginPermissionApproval;
   selectedProvider?: PluginProvider | null;
+  timeoutSecOverride?: number | null;
   installedPath: string;
   source: PluginPackageSource;
   lastResolvedProvider?: PluginProvider | null;
@@ -320,6 +321,7 @@ export interface PluginWorkflowStepSnapshot {
   pluginName: string;
   pluginVersion: string;
   selectedProvider?: PluginProvider | null;
+  timeoutSecOverride?: number | null;
   approvedPermissions: PluginPermissionApproval;
   failurePolicy: PluginWorkflowFailurePolicy;
 }

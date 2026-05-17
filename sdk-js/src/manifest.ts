@@ -47,8 +47,8 @@ export function getAllowedProviders(language: PluginRuntimeLanguage): PluginProv
 export function getManifestValidationErrors(manifest: PluginManifest): string[] {
   const errors: string[] = [];
 
-  if (!manifest.pluginId?.trim()) {
-    errors.push('pluginId is required.');
+  if (!manifest.id?.trim()) {
+    errors.push('id is required.');
   }
 
   if (!manifest.slug?.trim()) {

@@ -352,7 +352,7 @@ export interface PluginRuntimeSpec {
 }
 
 export interface PluginManifest {
-  pluginId: string;
+  id: string;
   slug: string;
   name: string;
   version: string;

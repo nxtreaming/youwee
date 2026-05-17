@@ -161,7 +161,7 @@ describe('youwee-sdk createContext', () => {
 describe('youwee-sdk manifest helpers', () => {
   test('validates plugin manifests', () => {
     const validManifest: PluginManifest = {
-      pluginId: 'plugin-1',
+      id: 'local.plugin-1',
       slug: 'example-plugin',
       name: 'Example plugin',
       version: '0.1.0',
@@ -185,7 +185,7 @@ describe('youwee-sdk manifest helpers', () => {
 
     const invalidErrors = getManifestValidationErrors({
       ...validManifest,
-      pluginId: '',
+      id: '',
       runtime: {
         ...validManifest.runtime,
         supportedProviders: ['python'],
@@ -193,7 +193,7 @@ describe('youwee-sdk manifest helpers', () => {
     });
 
     expect(invalidErrors.length).toBeGreaterThan(0);
-    expect(invalidErrors.join('\n')).toContain('pluginId is required');
+    expect(invalidErrors.join('\n')).toContain('id is required');
     expect(invalidErrors.join('\n')).toContain('unsupported provider "python"');
   });
 
@@ -211,7 +211,7 @@ describe('youwee-sdk manifest helpers', () => {
 
   test('rejects invalid compatibility syntax in manifests', () => {
     const errors = getManifestValidationErrors({
-      pluginId: 'plugin-1',
+      id: 'local.plugin-1',
       slug: 'example-plugin',
       name: 'Example plugin',
       version: '0.1.0',
@@ -230,7 +230,7 @@ describe('youwee-sdk manifest helpers', () => {
 
   test('rejects SDK trigger identifiers inside plugin.json triggers', () => {
     const errors = getManifestValidationErrors({
-      pluginId: 'plugin-1',
+      id: 'local.plugin-1',
       slug: 'example-plugin',
       name: 'Example plugin',
       version: '0.1.0',

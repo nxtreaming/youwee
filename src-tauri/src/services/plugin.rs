@@ -87,7 +87,31 @@ pub struct InstallPluginSourceInput {
 pub struct CreatePluginScaffoldInput {
     pub name: String,
     #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
     pub slug: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default)]
+    pub homepage: Option<String>,
+    #[serde(default)]
+    pub repository: Option<String>,
+    #[serde(default)]
+    pub license: Option<String>,
+    #[serde(default)]
+    pub triggers: Vec<String>,
+    #[serde(default)]
+    pub supported_providers: Vec<PluginProvider>,
+    #[serde(default)]
+    pub preferred_provider: Option<PluginProvider>,
+    #[serde(default)]
+    pub permissions: PluginPermissionRequest,
+    #[serde(default)]
+    pub timeout_sec: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -108,6 +132,8 @@ struct PluginRegistryEntry {
     env_values: BTreeMap<String, String>,
     #[serde(default)]
     selected_provider: Option<PluginProvider>,
+    #[serde(default)]
+    timeout_sec_override: Option<u64>,
     source: Option<PluginPackageSource>,
     #[serde(default)]
     last_resolved_provider: Option<PluginProvider>,
@@ -291,6 +317,59 @@ fn installation_path(root: &Path, manifest: &PluginManifest) -> PathBuf {
     root.join(install_dir_name(&manifest.plugin_id, &manifest.slug))
 }
 
+fn sanitize_plugin_id(input: &str) -> String {
+    let mut normalized = String::new();
+    let mut last_separator: Option<char> = None;
+
+    for char in input.trim().chars() {
+        if char.is_ascii_alphanumeric() {
+            normalized.push(char.to_ascii_lowercase());
+            last_separator = None;
+            continue;
+        }
+
+        let separator = if char == '.' { '.' } else { '-' };
+        if normalized.is_empty() || last_separator == Some(separator) {
+            continue;
+        }
+        normalized.push(separator);
+        last_separator = Some(separator);
+    }
+
+    normalized
+        .trim_matches(|char| char == '.' || char == '-')
+        .to_string()
+}
+
+fn generate_plugin_id(author: Option<&str>, slug: &str) -> String {
+    let namespace = author
+        .map(sanitize_plugin_id)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "local".to_string());
+    let package = sanitize_plugin_id(slug);
+
+    if package.is_empty() {
+        namespace
+    } else {
+        format!("{}.{}", namespace, package)
+    }
+}
+
+fn find_existing_installation_path(root: &Path, plugin_id: &str) -> Option<PathBuf> {
+    std::fs::read_dir(root)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .find_map(|entry| {
+            let path = entry.path();
+            let file_name = path.file_name()?.to_str()?;
+            if file_name == plugin_id || file_name.starts_with(&format!("{}-", plugin_id)) {
+                Some(path)
+            } else {
+                None
+            }
+        })
+}
+
 fn default_supported_providers(language: &PluginRuntimeLanguage) -> Vec<PluginProvider> {
     match language {
         PluginRuntimeLanguage::Javascript => {
@@ -312,7 +391,7 @@ fn allowed_manifest_triggers() -> &'static [&'static str] {
 fn validate_manifest(manifest: &PluginManifest, manifest_path: &Path) -> Result<(), String> {
     if manifest.plugin_id.trim().is_empty() {
         return Err(format!(
-            "Plugin manifest {} is missing pluginId",
+            "Plugin manifest {} is missing id",
             manifest_path.display()
         ));
     }
@@ -802,6 +881,7 @@ fn build_installation_from_registry(
         selected_provider: entry
             .and_then(|value| value.selected_provider.clone())
             .or_else(|| manifest.runtime.preferred_provider.clone()),
+        timeout_sec_override: entry.and_then(|value| value.timeout_sec_override),
         installed_path,
         source: entry
             .and_then(|value| value.source.clone())
@@ -833,6 +913,7 @@ fn snapshot_step_from_plugin(
         plugin_name: plugin.manifest.name.clone(),
         plugin_version: plugin.manifest.version.clone(),
         selected_provider: plugin.installation.selected_provider.clone(),
+        timeout_sec_override: plugin.installation.timeout_sec_override,
         approved_permissions: plugin.installation.approved_permissions.clone(),
         failure_policy: step.failure_policy.clone(),
     }
@@ -1124,6 +1205,18 @@ pub async fn install_plugin_internal(
     }
     let root = ensure_plugins_root(app)?;
     let destination = installation_path(&root, &package.manifest);
+    if let Some(existing_path) = find_existing_installation_path(&root, &package.manifest.plugin_id)
+    {
+        if existing_path != destination && existing_path.exists() {
+            std::fs::remove_dir_all(&existing_path).map_err(|e| {
+                format!(
+                    "Failed to replace existing plugin installation {}: {}",
+                    existing_path.display(),
+                    e
+                )
+            })?;
+        }
+    }
     if destination.exists() {
         std::fs::remove_dir_all(&destination).map_err(|e| {
             format!(
@@ -1145,6 +1238,7 @@ pub async fn install_plugin_internal(
             approved_permissions: PluginPermissionApproval::default(),
             env_values: BTreeMap::new(),
             selected_provider,
+            timeout_sec_override: None,
             source: Some(package.source.clone()),
             last_resolved_provider: None,
             last_resolved_source: None,
@@ -1176,40 +1270,111 @@ pub fn create_plugin_scaffold_internal(
     app: &AppHandle,
     input: CreatePluginScaffoldInput,
 ) -> Result<PluginSummary, String> {
-    let name = input.name.trim();
+    let CreatePluginScaffoldInput {
+        name,
+        id,
+        slug,
+        version,
+        description,
+        author,
+        homepage,
+        repository,
+        license,
+        triggers,
+        supported_providers,
+        preferred_provider,
+        permissions,
+        timeout_sec,
+    } = input;
+
+    let name = name.trim();
     if name.is_empty() {
         return Err("Plugin name cannot be empty".to_string());
     }
 
-    let plugin_id = Uuid::new_v4().to_string();
-    let slug = input.slug.as_deref().map(sanitize_slug).unwrap_or_else(|| sanitize_slug(name));
+    let slug = slug.as_deref().map(sanitize_slug).unwrap_or_else(|| sanitize_slug(name));
+    let plugin_id = id
+        .as_deref()
+        .map(sanitize_plugin_id)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| generate_plugin_id(author.as_deref(), &slug));
+    let supported_providers = if supported_providers.is_empty() {
+        vec![PluginProvider::Node, PluginProvider::Bun]
+    } else {
+        supported_providers
+    };
+    let preferred_provider = preferred_provider
+        .clone()
+        .filter(|provider| supported_providers.contains(provider))
+        .or_else(|| supported_providers.first().cloned());
+    let triggers = if triggers.is_empty() {
+        vec!["download.completed".to_string()]
+    } else {
+        triggers
+            .into_iter()
+            .map(|trigger| trigger.trim().to_string())
+            .filter(|trigger| !trigger.is_empty())
+            .collect()
+    };
     let manifest = PluginManifest {
         plugin_id: plugin_id.clone(),
         slug: slug.clone(),
         name: name.to_string(),
-        version: "0.1.0".to_string(),
-        description: Some("Describe what this plugin does.".to_string()),
-        author: None,
-        homepage: None,
-        repository: None,
-        license: Some("MIT".to_string()),
+        version: version
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("0.1.0")
+            .to_string(),
+        description: Some(
+            description
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("Describe what this plugin does.")
+                .to_string(),
+        ),
+        author: author
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string),
+        homepage: homepage
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string),
+        repository: repository
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string),
+        license: Some(
+            license
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("MIT")
+                .to_string(),
+        ),
         runtime: PluginRuntimeSpec {
             language: PluginRuntimeLanguage::Javascript,
-            supported_providers: vec![PluginProvider::Node, PluginProvider::Bun],
-            preferred_provider: Some(PluginProvider::Node),
+            supported_providers,
+            preferred_provider,
             entrypoint: "src/plugin.js".to_string(),
         },
         compatibility: Some(PluginCompatibilitySpec {
             app_version: Some(build_scaffold_compatibility_range(env!("CARGO_PKG_VERSION"))),
             sdk_version: Some(build_scaffold_compatibility_range(&current_sdk_version())),
         }),
-        triggers: vec!["download.completed".to_string()],
-        permissions: PluginPermissionRequest::default(),
-        timeout_sec: 60,
+        triggers,
+        permissions,
+        timeout_sec: timeout_sec.unwrap_or(60).max(1),
         readme: Some("README.md".to_string()),
         checksum: None,
         published_at: None,
     };
+    validate_manifest(&manifest, Path::new("plugin.json"))?;
 
     let root = ensure_plugins_root(app)?;
     let destination = installation_path(&root, &manifest);
@@ -1261,7 +1426,11 @@ pub fn create_plugin_scaffold_internal(
             e
         )
     })?;
-    std::fs::write(destination.join("src").join("plugin.js"), build_scaffold_plugin_module()).map_err(|e| {
+    std::fs::write(
+        destination.join("src").join("plugin.js"),
+        build_scaffold_plugin_module(&manifest),
+    )
+    .map_err(|e| {
         format!(
             "Failed to write plugin module {}: {}",
             destination.join("src").join("plugin.js").display(),
@@ -1345,6 +1514,7 @@ pub fn create_plugin_scaffold_internal(
             approved_permissions: PluginPermissionApproval::default(),
             env_values: BTreeMap::new(),
             selected_provider: manifest.runtime.preferred_provider.clone(),
+            timeout_sec_override: None,
             source: Some(PluginPackageSource {
                 kind: PluginPackageSourceKind::AppScaffold,
                 value: destination.to_string_lossy().to_string(),
@@ -1517,6 +1687,26 @@ pub fn set_plugin_provider_internal(
         .get_mut(plugin_id)
         .ok_or_else(|| format!("Plugin not found: {}", plugin_id))?;
     entry.selected_provider = Some(provider);
+    write_registry(app, &registry)
+}
+
+pub fn set_plugin_timeout_internal(
+    app: &AppHandle,
+    plugin_id: &str,
+    timeout_sec: Option<u64>,
+) -> Result<(), String> {
+    if let Some(value) = timeout_sec {
+        if value == 0 {
+            return Err("Plugin timeout must be greater than 0".to_string());
+        }
+    }
+
+    let mut registry = read_registry(app)?;
+    let entry = registry
+        .installations
+        .get_mut(plugin_id)
+        .ok_or_else(|| format!("Plugin not found: {}", plugin_id))?;
+    entry.timeout_sec_override = timeout_sec;
     write_registry(app, &registry)
 }
 
@@ -1973,6 +2163,11 @@ async fn execute_plugin(
     run_id: &str,
     payload: &PostDownloadPluginPayload,
 ) -> Result<(PluginExecutionResult, PluginProvider, Option<String>), String> {
+    let timeout_sec = plugin
+        .installation
+        .timeout_sec_override
+        .unwrap_or(plugin.manifest.timeout_sec)
+        .max(1);
     let selected_provider = plugin
         .installation
         .selected_provider
@@ -2080,7 +2275,10 @@ async fn execute_plugin(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     cmd.hide_window();
-    cmd.env("YOUWEE_PLUGIN_TIMEOUT_MS", plugin.manifest.timeout_sec.saturating_mul(1000).to_string());
+    cmd.env(
+        "YOUWEE_PLUGIN_TIMEOUT_MS",
+        timeout_sec.saturating_mul(1000).to_string(),
+    );
     cmd.env("YOUWEE_PLUGIN_ID", &plugin.manifest.plugin_id);
     cmd.env("YOUWEE_PLUGIN_SLUG", &plugin.manifest.slug);
     cmd.env("YOUWEE_PLUGIN_NAME", &plugin.manifest.name);
@@ -2206,7 +2404,7 @@ async fn execute_plugin(
     ));
 
     let status = match tokio::time::timeout(
-        std::time::Duration::from_secs(plugin.manifest.timeout_sec.max(1)),
+        std::time::Duration::from_secs(timeout_sec),
         child.wait(),
     )
     .await
@@ -2225,7 +2423,7 @@ async fn execute_plugin(
             let stdout = output_to_string(&stdout_task.await.unwrap_or_default());
             let stderr = output_to_string(&stderr_task.await.unwrap_or_default());
 
-            let mut message = format!("Plugin timed out after {}s", plugin.manifest.timeout_sec);
+            let mut message = format!("Plugin timed out after {}s", timeout_sec);
             message.push_str(&format!(
                 "\nProvider: {}\nResolved source: {}",
                 selected_provider.as_str(),
@@ -2367,7 +2565,13 @@ async fn execute_plugin_workflow_run(
         let mut plugin = base_plugin.clone();
         plugin.installation.enabled = true;
         plugin.installation.selected_provider = step.selected_provider.clone();
+        plugin.installation.timeout_sec_override = step.timeout_sec_override;
         plugin.installation.approved_permissions = step.approved_permissions.clone();
+        let effective_timeout_sec = plugin
+            .installation
+            .timeout_sec_override
+            .unwrap_or(plugin.manifest.timeout_sec)
+            .max(1);
 
         let selected_provider = plugin
             .installation
@@ -2419,7 +2623,7 @@ async fn execute_plugin_workflow_run(
                 details: Some(format!(
                     "Runtime: {}\nTimeout: {}s\nStep: {} / {}",
                     plugin.manifest.runtime.language.as_str(),
-                    plugin.manifest.timeout_sec,
+                    effective_timeout_sec,
                     step_index + 1,
                     workflow_run.steps.len()
                 )),
@@ -2681,23 +2885,39 @@ pub fn resolve_download_workflow_snapshot(
     resolve_workflow_step_snapshots(&plugins_by_id, &workflow)
 }
 
-fn build_scaffold_plugin_module() -> String {
-    r#"const { definePlugin, triggers } = require("youwee-sdk");
+fn sdk_trigger_identifier(trigger: &str) -> &'static str {
+    match trigger {
+        "download.queued" => "triggers.downloadQueued",
+        "download.beforeStart" => "triggers.downloadBeforeStart",
+        "download.completed" => "triggers.downloadCompleted",
+        "download.failed" => "triggers.downloadFailed",
+        _ => "triggers.downloadCompleted",
+    }
+}
 
-module.exports = definePlugin({
-  meta: {
-    name: "Replace this name",
-    version: "0.1.0",
-    description: "Describe what this plugin does.",
-  },
+fn build_scaffold_plugin_module(manifest: &PluginManifest) -> String {
+    let primary_trigger = manifest
+        .triggers
+        .first()
+        .map(|trigger| sdk_trigger_identifier(trigger))
+        .unwrap_or("triggers.downloadCompleted");
+    format!(
+        r#"const {{ definePlugin, triggers }} = require("youwee-sdk");
 
-  hooks: {
-    [triggers.downloadCompleted]: async (ctx) => {
-      ctx.log.info("Hook started", {
+module.exports = definePlugin({{
+  meta: {{
+    name: "{name}",
+    version: "{version}",
+    description: "{description}",
+  }},
+
+  hooks: {{
+    [{primary_trigger}]: async (ctx) => {{
+      ctx.log.info("Hook started", {{
         filename: ctx.file.name,
         trigger: ctx.trigger,
         ffmpegAvailable: ctx.youwee.tools.ffmpeg.available,
-      });
+      }});
 
       // Start editing here:
       // 1. Read the downloaded file info from ctx.file
@@ -2706,16 +2926,24 @@ module.exports = definePlugin({
       // 4. Use app capabilities from ctx.youwee.tools / ctx.youwee.ai
       // 5. Return ctx.ok(...) or ctx.fail(...)
 
-      return ctx.ok("Plugin scaffold ran successfully.", {
+      return ctx.ok("Plugin scaffold ran successfully.", {{
         filepath: ctx.file.path,
         filename: ctx.file.name,
         trigger: ctx.trigger,
-      });
-    },
-  },
-});
-"#
-    .to_string()
+      }});
+    }},
+  }},
+}});
+"#,
+        name = manifest.name.replace('"', "\\\""),
+        version = manifest.version.replace('"', "\\\""),
+        description = manifest
+            .description
+            .as_deref()
+            .unwrap_or("Describe what this plugin does.")
+            .replace('"', "\\\""),
+        primary_trigger = primary_trigger,
+    )
 }
 
 fn build_scaffold_package_json(manifest: &PluginManifest) -> String {
@@ -2794,7 +3022,7 @@ fn build_scaffold_readme(manifest: &PluginManifest) -> String {
 This plugin scaffold targets the Youwee JavaScript plugin runtime.
 
 Identity:
-- `pluginId`: `{plugin_id}`
+- `id`: `{plugin_id}`
 - `slug`: `{slug}`
 - `language`: `{language}`
 - `supportedProviders`: `{providers}`

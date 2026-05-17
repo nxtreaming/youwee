@@ -87,6 +87,7 @@ pub struct PluginCompatibilitySpec {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
+    #[serde(rename = "id", alias = "pluginId")]
     pub plugin_id: String,
     pub slug: String,
     pub name: String,
@@ -153,6 +154,8 @@ pub struct PluginInstallation {
     pub approved_permissions: PluginPermissionApproval,
     #[serde(default)]
     pub selected_provider: Option<PluginProvider>,
+    #[serde(default)]
+    pub timeout_sec_override: Option<u64>,
     pub installed_path: String,
     pub source: PluginPackageSource,
     #[serde(default)]
@@ -246,6 +249,8 @@ pub struct PluginWorkflowStepSnapshot {
     pub plugin_version: String,
     #[serde(default)]
     pub selected_provider: Option<PluginProvider>,
+    #[serde(default)]
+    pub timeout_sec_override: Option<u64>,
     #[serde(default)]
     pub approved_permissions: PluginPermissionApproval,
     #[serde(default)]

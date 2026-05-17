@@ -45,16 +45,17 @@ function snapshotFromWorkflow(
   plugins: PluginSummary[],
 ): PluginWorkflowStepSnapshot[] {
   return workflow.steps.reduce<PluginWorkflowStepSnapshot[]>((steps, step) => {
-    const plugin = plugins.find((item) => item.manifest.pluginId === step.pluginId);
+    const plugin = plugins.find((item) => item.manifest.id === step.pluginId);
     if (!plugin || !plugin.installation.enabled) {
       return steps;
     }
 
     steps.push({
-      pluginId: plugin.manifest.pluginId,
+      pluginId: plugin.manifest.id,
       pluginName: plugin.manifest.name,
       pluginVersion: plugin.manifest.version,
       selectedProvider: plugin.installation.selectedProvider,
+      timeoutSecOverride: plugin.installation.timeoutSecOverride,
       approvedPermissions: plugin.installation.approvedPermissions,
       failurePolicy: step.failurePolicy,
     });

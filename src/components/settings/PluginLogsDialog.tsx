@@ -65,7 +65,7 @@ export function PluginLogsDialog({
         <div className="border-b border-border/60 px-6 py-3 text-xs text-muted-foreground">
           {plugin && (
             <div className="flex flex-wrap items-center gap-2">
-              <span>{plugin.manifest.pluginId}</span>
+              <span>{plugin.manifest.id}</span>
               <span>•</span>
               <span>{t('download.pluginLogsCount', { count: logs.length })}</span>
             </div>

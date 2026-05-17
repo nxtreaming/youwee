@@ -8,8 +8,9 @@ use crate::services::{
     inspect_plugin_folder_internal, inspect_plugin_url_internal, inspect_plugin_zip_internal,
     install_plugin_internal, list_plugins_internal, list_runtime_providers_internal,
     open_plugin_directory_internal, set_default_provider_for_language_internal,
-    set_plugin_provider_internal, set_plugin_trust_internal, update_plugin_env_values_internal,
-    update_plugin_state_internal, update_plugin_trigger_workflow_internal,
+    set_plugin_provider_internal, set_plugin_timeout_internal, set_plugin_trust_internal,
+    update_plugin_env_values_internal, update_plugin_state_internal,
+    update_plugin_trigger_workflow_internal,
     CreatePluginScaffoldInput, InstallPluginSourceInput, PluginEnvValuesInput,
     PluginPermissionApprovalInput,
 };
@@ -136,6 +137,15 @@ pub fn set_plugin_provider(
     provider: PluginProvider,
 ) -> Result<(), String> {
     set_plugin_provider_internal(&app, &plugin_id, provider)
+}
+
+#[tauri::command]
+pub fn set_plugin_timeout(
+    app: AppHandle,
+    plugin_id: String,
+    timeout_sec: Option<u64>,
+) -> Result<(), String> {
+    set_plugin_timeout_internal(&app, &plugin_id, timeout_sec)
 }
 
 #[tauri::command]

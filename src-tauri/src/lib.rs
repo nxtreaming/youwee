@@ -275,6 +275,7 @@ pub fn run() {
             commands::update_plugin_env_values,
             commands::set_plugin_trust,
             commands::set_plugin_provider,
+            commands::set_plugin_timeout,
             commands::open_plugin_directory,
             commands::list_runtime_providers,
             commands::get_runtime_provider_status,

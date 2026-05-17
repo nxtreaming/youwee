@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { localizeUnknownError } from '@/lib/backend-error';
 import { buildWorkflowSnapshotMap, savePluginWorkflowSnapshots } from '@/lib/post-download-plugins';
 import type {
@@ -52,6 +53,26 @@ import { SettingsCard } from './SettingsSection';
 type InstallPluginSourceInput = {
   kind: 'app-scaffold' | 'local-folder' | 'local-zip';
   value: string;
+};
+
+type CreatePluginFormState = {
+  name: string;
+  id: string;
+  slug: string;
+  version: string;
+  description: string;
+  author: string;
+  homepage: string;
+  repository: string;
+  license: string;
+  timeoutSec: string;
+  supportedProviders: PluginProvider[];
+  preferredProvider: PluginProvider;
+  triggers: WorkflowTrigger[];
+  permissionNetwork: boolean;
+  permissionReadPaths: string;
+  permissionWritePaths: string;
+  permissionEnv: string;
 };
 
 const PROVIDER_LABELS: Record<PluginProvider, string> = {
@@ -91,12 +112,35 @@ function summarizeRequestedPermissions(
   return entries;
 }
 
+function buildRequestedPermissionApproval(plugin: PluginSummary): PluginPermissionApproval {
+  return {
+    network: plugin.manifest.permissions.network,
+    readPaths: plugin.manifest.permissions.readPaths.length > 0,
+    writePaths: plugin.manifest.permissions.writePaths.length > 0,
+    env: plugin.manifest.permissions.env.length > 0,
+  };
+}
+
+function hasUnapprovedRequestedPermissions(plugin: PluginSummary) {
+  const requested = buildRequestedPermissionApproval(plugin);
+  return (
+    (requested.network && !plugin.installation.approvedPermissions.network) ||
+    (requested.readPaths && !plugin.installation.approvedPermissions.readPaths) ||
+    (requested.writePaths && !plugin.installation.approvedPermissions.writePaths) ||
+    (requested.env && !plugin.installation.approvedPermissions.env)
+  );
+}
+
 function currentProvider(plugin: PluginSummary) {
   return (
     plugin.installation.selectedProvider ??
     plugin.manifest.runtime.preferredProvider ??
     plugin.manifest.runtime.supportedProviders[0]
   );
+}
+
+function currentTimeoutSec(plugin: PluginSummary) {
+  return plugin.installation.timeoutSecOverride ?? plugin.manifest.timeoutSec;
 }
 
 function summarizeCompatibility(
@@ -114,8 +158,10 @@ function summarizeCompatibility(
 }
 
 function formatPluginIdentifier(pluginId: string, slug: string) {
-  const shortId = pluginId.slice(0, 8);
-  return `${shortId} • ${slug}`;
+  if (pluginId.endsWith(`.${slug}`)) {
+    return pluginId;
+  }
+  return `${pluginId} • ${slug}`;
 }
 
 function formatChecksum(checksum: string) {
@@ -159,6 +205,33 @@ const WORKFLOW_TRIGGERS = [
 ] as const;
 type WorkflowTrigger = (typeof WORKFLOW_TRIGGERS)[number];
 
+const DEFAULT_CREATE_PLUGIN_FORM: CreatePluginFormState = {
+  name: '',
+  id: '',
+  slug: '',
+  version: '0.1.0',
+  description: '',
+  author: '',
+  homepage: '',
+  repository: '',
+  license: 'MIT',
+  timeoutSec: '60',
+  supportedProviders: ['node', 'bun'],
+  preferredProvider: 'node',
+  triggers: ['download.completed'],
+  permissionNetwork: false,
+  permissionReadPaths: '',
+  permissionWritePaths: '',
+  permissionEnv: '',
+};
+
+function parseMultilineList(value: string) {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export function PostDownloadPluginsCard() {
   const { t } = useTranslation('settings');
   const [plugins, setPlugins] = useState<PluginSummary[]>([]);
@@ -175,12 +248,14 @@ export function PostDownloadPluginsCard() {
   const [createOpen, setCreateOpen] = useState(false);
   const [runtimeGuideOpen, setRuntimeGuideOpen] = useState(false);
   const [expandedPluginId, setExpandedPluginId] = useState<string | null>(null);
-  const [newPluginName, setNewPluginName] = useState('');
-  const [newPluginSlug, setNewPluginSlug] = useState('');
+  const [createPluginForm, setCreatePluginForm] = useState<CreatePluginFormState>(
+    DEFAULT_CREATE_PLUGIN_FORM,
+  );
   const [inspection, setInspection] = useState<PluginPackageInspection | null>(null);
   const [installSource, setInstallSource] = useState<InstallPluginSourceInput | null>(null);
   const [installAcknowledged, setInstallAcknowledged] = useState(false);
   const [envDrafts, setEnvDrafts] = useState<Record<string, string>>({});
+  const [timeoutDrafts, setTimeoutDrafts] = useState<Record<string, string>>({});
   const [runtimeStatuses, setRuntimeStatuses] = useState<
     Record<string, { status: string; message?: string | null }>
   >({});
@@ -189,6 +264,13 @@ export function PostDownloadPluginsCard() {
   const [pluginLogs, setPluginLogs] = useState<LogEntry[]>([]);
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
   const [pluginLogsError, setPluginLogsError] = useState<string | null>(null);
+  const [permissionDialogPlugin, setPermissionDialogPlugin] = useState<PluginSummary | null>(null);
+  const [permissionDialogState, setPermissionDialogState] = useState<PluginPermissionApproval>({
+    network: false,
+    readPaths: false,
+    writePaths: false,
+    env: false,
+  });
   const [error, setError] = useState<string | null>(null);
 
   const loadPlugins = useCallback(async () => {
@@ -218,7 +300,7 @@ export function PostDownloadPluginsCard() {
           defaults[language] = currentProvider(plugin);
         }
         if (plugin.installation.lastExecutionStatus || plugin.installation.lastError) {
-          statuses[plugin.manifest.pluginId] = {
+          statuses[plugin.manifest.id] = {
             status: plugin.installation.lastExecutionStatus ?? 'idle',
             message: plugin.installation.lastError,
           };
@@ -358,11 +440,25 @@ export function PostDownloadPluginsCard() {
   };
 
   const handleTogglePlugin = async (plugin: PluginSummary, enabled: boolean) => {
+    if (enabled && hasUnapprovedRequestedPermissions(plugin)) {
+      const requested = buildRequestedPermissionApproval(plugin);
+      setPermissionDialogPlugin(plugin);
+      setPermissionDialogState({
+        network: requested.network ? plugin.installation.approvedPermissions.network : false,
+        readPaths: requested.readPaths ? plugin.installation.approvedPermissions.readPaths : false,
+        writePaths: requested.writePaths
+          ? plugin.installation.approvedPermissions.writePaths
+          : false,
+        env: requested.env ? plugin.installation.approvedPermissions.env : false,
+      });
+      return;
+    }
+
     try {
-      await invoke('update_plugin_state', { pluginId: plugin.manifest.pluginId, enabled });
+      await invoke('update_plugin_state', { pluginId: plugin.manifest.id, enabled });
       updatePluginList((items) =>
         items.map((item) =>
-          item.manifest.pluginId === plugin.manifest.pluginId
+          item.manifest.id === plugin.manifest.id
             ? {
                 ...item,
                 installation: { ...item.installation, enabled },
@@ -376,18 +472,51 @@ export function PostDownloadPluginsCard() {
     }
   };
 
+  const handleEnablePluginWithPermissions = async () => {
+    if (!permissionDialogPlugin) return;
+
+    try {
+      await invoke('approve_plugin_permissions', {
+        pluginId: permissionDialogPlugin.manifest.id,
+        permissions: permissionDialogState,
+      });
+      await invoke('update_plugin_state', {
+        pluginId: permissionDialogPlugin.manifest.id,
+        enabled: true,
+      });
+      updatePluginList((items) =>
+        items.map((item) =>
+          item.manifest.id === permissionDialogPlugin.manifest.id
+            ? {
+                ...item,
+                installation: {
+                  ...item.installation,
+                  enabled: true,
+                  approvedPermissions: permissionDialogState,
+                },
+              }
+            : item,
+        ),
+      );
+      setPermissionDialogPlugin(null);
+    } catch (err) {
+      console.error('Failed to enable plugin with permissions:', err);
+      setError(t('download.pluginPermissionEnableError'));
+    }
+  };
+
   const handleApprovePermissions = async (
     plugin: PluginSummary,
     permissions: PluginPermissionApproval,
   ) => {
     try {
       await invoke('approve_plugin_permissions', {
-        pluginId: plugin.manifest.pluginId,
+        pluginId: plugin.manifest.id,
         permissions,
       });
       updatePluginList((items) =>
         items.map((item) =>
-          item.manifest.pluginId === plugin.manifest.pluginId
+          item.manifest.id === plugin.manifest.id
             ? {
                 ...item,
                 installation: { ...item.installation, approvedPermissions: permissions },
@@ -402,8 +531,16 @@ export function PostDownloadPluginsCard() {
   };
 
   const handleCreatePlugin = async () => {
-    const trimmedName = newPluginName.trim();
+    const trimmedName = createPluginForm.name.trim();
     if (!trimmedName) return;
+
+    const supportedProviders =
+      createPluginForm.supportedProviders.length > 0
+        ? createPluginForm.supportedProviders
+        : DEFAULT_CREATE_PLUGIN_FORM.supportedProviders;
+    const preferredProvider = supportedProviders.includes(createPluginForm.preferredProvider)
+      ? createPluginForm.preferredProvider
+      : supportedProviders[0];
 
     setCreating(true);
     setError(null);
@@ -411,11 +548,30 @@ export function PostDownloadPluginsCard() {
       await invoke<PluginSummary>('create_plugin_scaffold', {
         input: {
           name: trimmedName,
-          slug: newPluginSlug.trim() || null,
+          id: createPluginForm.id.trim() || null,
+          slug: createPluginForm.slug.trim() || null,
+          version: createPluginForm.version.trim() || null,
+          description: createPluginForm.description.trim() || null,
+          author: createPluginForm.author.trim() || null,
+          homepage: createPluginForm.homepage.trim() || null,
+          repository: createPluginForm.repository.trim() || null,
+          license: createPluginForm.license.trim() || null,
+          timeoutSec: Number.parseInt(createPluginForm.timeoutSec, 10) || 60,
+          triggers:
+            createPluginForm.triggers.length > 0
+              ? createPluginForm.triggers
+              : DEFAULT_CREATE_PLUGIN_FORM.triggers,
+          supportedProviders,
+          preferredProvider,
+          permissions: {
+            network: createPluginForm.permissionNetwork,
+            readPaths: parseMultilineList(createPluginForm.permissionReadPaths),
+            writePaths: parseMultilineList(createPluginForm.permissionWritePaths),
+            env: parseMultilineList(createPluginForm.permissionEnv),
+          },
         },
       });
-      setNewPluginName('');
-      setNewPluginSlug('');
+      setCreatePluginForm(DEFAULT_CREATE_PLUGIN_FORM);
       setCreateOpen(false);
       await loadPlugins();
     } catch (err) {
@@ -424,6 +580,47 @@ export function PostDownloadPluginsCard() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const updateCreatePluginForm = <K extends keyof CreatePluginFormState>(
+    key: K,
+    value: CreatePluginFormState[K],
+  ) => {
+    setCreatePluginForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const toggleCreatePluginProvider = (provider: PluginProvider) => {
+    setCreatePluginForm((current) => {
+      const exists = current.supportedProviders.includes(provider);
+      const supportedProviders = exists
+        ? current.supportedProviders.filter((item) => item !== provider)
+        : [...current.supportedProviders, provider];
+
+      if (supportedProviders.length === 0) {
+        return {
+          ...current,
+          supportedProviders,
+          preferredProvider: DEFAULT_CREATE_PLUGIN_FORM.preferredProvider,
+        };
+      }
+
+      return {
+        ...current,
+        supportedProviders,
+        preferredProvider: supportedProviders.includes(current.preferredProvider)
+          ? current.preferredProvider
+          : supportedProviders[0],
+      };
+    });
+  };
+
+  const toggleCreatePluginTrigger = (trigger: WorkflowTrigger) => {
+    setCreatePluginForm((current) => ({
+      ...current,
+      triggers: current.triggers.includes(trigger)
+        ? current.triggers.filter((item) => item !== trigger)
+        : [...current.triggers, trigger],
+    }));
   };
 
   const handleOpenPluginDirectory = async (pluginId: string) => {
@@ -439,7 +636,7 @@ export function PostDownloadPluginsCard() {
     try {
       const refreshed = await invoke<PluginSummary>('get_plugin_details', { pluginId });
       updatePluginList((items) =>
-        items.map((item) => (item.manifest.pluginId === pluginId ? refreshed : item)),
+        items.map((item) => (item.manifest.id === pluginId ? refreshed : item)),
       );
       setRuntimeStatuses((current) => ({
         ...current,
@@ -456,10 +653,10 @@ export function PostDownloadPluginsCard() {
 
   const handleSetPluginProvider = async (plugin: PluginSummary, provider: PluginProvider) => {
     try {
-      await invoke('set_plugin_provider', { pluginId: plugin.manifest.pluginId, provider });
+      await invoke('set_plugin_provider', { pluginId: plugin.manifest.id, provider });
       updatePluginList((items) =>
         items.map((item) =>
-          item.manifest.pluginId === plugin.manifest.pluginId
+          item.manifest.id === plugin.manifest.id
             ? {
                 ...item,
                 installation: { ...item.installation, selectedProvider: provider },
@@ -482,11 +679,21 @@ export function PostDownloadPluginsCard() {
 
   const getEnvDraftValue = (pluginId: string, key: string) => envDrafts[`${pluginId}:${key}`] ?? '';
 
+  const setTimeoutDraftValue = (pluginId: string, value: string) => {
+    setTimeoutDrafts((current) => ({
+      ...current,
+      [pluginId]: value,
+    }));
+  };
+
+  const getTimeoutDraftValue = (plugin: PluginSummary) =>
+    timeoutDrafts[plugin.manifest.id] ?? String(currentTimeoutSec(plugin));
+
   const handleSavePluginEnv = async (plugin: PluginSummary, key: string) => {
-    const value = getEnvDraftValue(plugin.manifest.pluginId, key);
+    const value = getEnvDraftValue(plugin.manifest.id, key);
     try {
       await invoke('update_plugin_env_values', {
-        pluginId: plugin.manifest.pluginId,
+        pluginId: plugin.manifest.id,
         input: {
           values: {
             [key]: value.trim() ? value : null,
@@ -495,7 +702,7 @@ export function PostDownloadPluginsCard() {
       });
       updatePluginList((items) =>
         items.map((item) =>
-          item.manifest.pluginId === plugin.manifest.pluginId
+          item.manifest.id === plugin.manifest.id
             ? {
                 ...item,
                 installation: {
@@ -509,7 +716,7 @@ export function PostDownloadPluginsCard() {
             : item,
         ),
       );
-      setEnvDraftValue(plugin.manifest.pluginId, key, '');
+      setEnvDraftValue(plugin.manifest.id, key, '');
     } catch (err) {
       console.error('Failed to update plugin env values:', err);
       setError(t('download.pluginEnvSaveError'));
@@ -519,7 +726,7 @@ export function PostDownloadPluginsCard() {
   const handleClearPluginEnv = async (plugin: PluginSummary, key: string) => {
     try {
       await invoke('update_plugin_env_values', {
-        pluginId: plugin.manifest.pluginId,
+        pluginId: plugin.manifest.id,
         input: {
           values: {
             [key]: null,
@@ -528,7 +735,7 @@ export function PostDownloadPluginsCard() {
       });
       updatePluginList((items) =>
         items.map((item) =>
-          item.manifest.pluginId === plugin.manifest.pluginId
+          item.manifest.id === plugin.manifest.id
             ? {
                 ...item,
                 installation: {
@@ -542,10 +749,63 @@ export function PostDownloadPluginsCard() {
             : item,
         ),
       );
-      setEnvDraftValue(plugin.manifest.pluginId, key, '');
+      setEnvDraftValue(plugin.manifest.id, key, '');
     } catch (err) {
       console.error('Failed to clear plugin env value:', err);
       setError(t('download.pluginEnvSaveError'));
+    }
+  };
+
+  const handleSavePluginTimeout = async (plugin: PluginSummary) => {
+    const rawValue = getTimeoutDraftValue(plugin).trim();
+    const parsed = Number.parseInt(rawValue, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setError(t('download.pluginTimeoutError'));
+      return;
+    }
+
+    try {
+      await invoke('set_plugin_timeout', {
+        pluginId: plugin.manifest.id,
+        timeoutSec: parsed,
+      });
+      updatePluginList((items) =>
+        items.map((item) =>
+          item.manifest.id === plugin.manifest.id
+            ? {
+                ...item,
+                installation: { ...item.installation, timeoutSecOverride: parsed },
+              }
+            : item,
+        ),
+      );
+      setTimeoutDraftValue(plugin.manifest.id, String(parsed));
+    } catch (err) {
+      console.error('Failed to update plugin timeout:', err);
+      setError(t('download.pluginTimeoutSaveError'));
+    }
+  };
+
+  const handleResetPluginTimeout = async (plugin: PluginSummary) => {
+    try {
+      await invoke('set_plugin_timeout', {
+        pluginId: plugin.manifest.id,
+        timeoutSec: null,
+      });
+      updatePluginList((items) =>
+        items.map((item) =>
+          item.manifest.id === plugin.manifest.id
+            ? {
+                ...item,
+                installation: { ...item.installation, timeoutSecOverride: null },
+              }
+            : item,
+        ),
+      );
+      setTimeoutDraftValue(plugin.manifest.id, String(plugin.manifest.timeoutSec));
+    } catch (err) {
+      console.error('Failed to reset plugin timeout:', err);
+      setError(t('download.pluginTimeoutSaveError'));
     }
   };
 
@@ -645,8 +905,7 @@ export function PostDownloadPluginsCard() {
             workflow.steps
               .map((step) => ({
                 step,
-                plugin:
-                  plugins.find((plugin) => plugin.manifest.pluginId === step.pluginId) ?? null,
+                plugin: plugins.find((plugin) => plugin.manifest.id === step.pluginId) ?? null,
               }))
               .filter((entry) => entry.plugin != null),
           ];
@@ -669,7 +928,7 @@ export function PostDownloadPluginsCard() {
               (plugin) =>
                 plugin.installation.enabled &&
                 plugin.manifest.triggers.includes(trigger) &&
-                !workflow.steps.some((step) => step.pluginId === plugin.manifest.pluginId),
+                !workflow.steps.some((step) => step.pluginId === plugin.manifest.id),
             ),
           ];
         }),
@@ -679,7 +938,7 @@ export function PostDownloadPluginsCard() {
 
   const selectedPlugin =
     selectedPluginId != null
-      ? (plugins.find((plugin) => plugin.manifest.pluginId === selectedPluginId) ?? null)
+      ? (plugins.find((plugin) => plugin.manifest.id === selectedPluginId) ?? null)
       : null;
 
   const inspectionCompatibilityEntries = useMemo(
@@ -779,7 +1038,7 @@ export function PostDownloadPluginsCard() {
                   {inspection.manifest.description || t('download.pluginNoDescription')}
                 </p>
                 <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                  <span>{inspection.manifest.pluginId}</span>
+                  <span>{inspection.manifest.id}</span>
                   <span>•</span>
                   <span>{formatSourceKind(inspection.source.kind, t)}</span>
                 </div>
@@ -862,15 +1121,13 @@ export function PostDownloadPluginsCard() {
               const compatibilityEntries = summarizeCompatibility(plugin.manifest.compatibility, t);
               const selectedProvider = currentProvider(plugin);
               const supportedProviders = plugin.manifest.runtime.supportedProviders;
-              const runtimeStatus = runtimeStatuses[plugin.manifest.pluginId];
-              const isExpanded = expandedPluginId === plugin.manifest.pluginId;
+              const runtimeStatus = runtimeStatuses[plugin.manifest.id];
+              const isExpanded = expandedPluginId === plugin.manifest.id;
               return (
                 <Collapsible
-                  key={plugin.manifest.pluginId}
+                  key={plugin.manifest.id}
                   open={isExpanded}
-                  onOpenChange={(open) =>
-                    setExpandedPluginId(open ? plugin.manifest.pluginId : null)
-                  }
+                  onOpenChange={(open) => setExpandedPluginId(open ? plugin.manifest.id : null)}
                 >
                   <div className="rounded-xl border border-border/60 bg-background/60">
                     <div className="flex items-center gap-3 px-4 py-3">
@@ -948,7 +1205,7 @@ export function PostDownloadPluginsCard() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleRefreshPlugin(plugin.manifest.pluginId)}
+                            onClick={() => handleRefreshPlugin(plugin.manifest.id)}
                           >
                             <RefreshCw className="h-4 w-4" />
                             {t('download.pluginRefreshInfo')}
@@ -956,7 +1213,7 @@ export function PostDownloadPluginsCard() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleOpenPluginLogs(plugin.manifest.pluginId)}
+                            onClick={() => handleOpenPluginLogs(plugin.manifest.id)}
                           >
                             <TerminalSquare className="h-4 w-4" />
                             {t('download.pluginViewLogs')}
@@ -964,7 +1221,7 @@ export function PostDownloadPluginsCard() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleOpenPluginDirectory(plugin.manifest.pluginId)}
+                            onClick={() => handleOpenPluginDirectory(plugin.manifest.id)}
                           >
                             <FolderOpen className="h-4 w-4" />
                             {t('download.pluginOpenFolder')}
@@ -986,10 +1243,7 @@ export function PostDownloadPluginsCard() {
                                   {t('download.pluginIdentifierLabel')}
                                 </p>
                                 <p>
-                                  {formatPluginIdentifier(
-                                    plugin.manifest.pluginId,
-                                    plugin.manifest.slug,
-                                  )}
+                                  {formatPluginIdentifier(plugin.manifest.id, plugin.manifest.slug)}
                                 </p>
                               </div>
                               <div>
@@ -1030,11 +1284,42 @@ export function PostDownloadPluginsCard() {
                                 <p className="font-medium text-foreground/80">
                                   {t('download.pluginTimeoutLabel')}
                                 </p>
-                                <p>
-                                  {t('download.pluginTimeout', {
-                                    seconds: plugin.manifest.timeoutSec,
-                                  })}
-                                </p>
+                                <div className="mt-1 space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      value={getTimeoutDraftValue(plugin)}
+                                      onChange={(event) =>
+                                        setTimeoutDraftValue(plugin.manifest.id, event.target.value)
+                                      }
+                                      className="h-8 text-xs"
+                                    />
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleSavePluginTimeout(plugin)}
+                                    >
+                                      {t('download.pluginTimeoutSave')}
+                                    </Button>
+                                  </div>
+                                  <p>
+                                    {plugin.installation.timeoutSecOverride
+                                      ? t('download.pluginTimeoutOverrideHelp', {
+                                          seconds: plugin.manifest.timeoutSec,
+                                        })
+                                      : t('download.pluginTimeoutDefaultHelp')}
+                                  </p>
+                                  {plugin.installation.timeoutSecOverride && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleResetPluginTimeout(plugin)}
+                                    >
+                                      {t('download.pluginTimeoutUseDefault')}
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                               <div>
                                 <p className="font-medium text-foreground/80">
@@ -1192,7 +1477,7 @@ export function PostDownloadPluginsCard() {
                                 <div className="flex flex-wrap gap-2 pt-1">
                                   {plugin.warnings.map((warning) => (
                                     <span
-                                      key={`${plugin.manifest.pluginId}-${warning}`}
+                                      key={`${plugin.manifest.id}-${warning}`}
                                       className="rounded bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600 dark:text-amber-400"
                                     >
                                       {warning}
@@ -1313,10 +1598,7 @@ export function PostDownloadPluginsCard() {
 
                               {plugin.manifest.permissions.env.map((envKey) => {
                                 const isSet = plugin.installation.envValueStatus[envKey] ?? false;
-                                const draftValue = getEnvDraftValue(
-                                  plugin.manifest.pluginId,
-                                  envKey,
-                                );
+                                const draftValue = getEnvDraftValue(plugin.manifest.id, envKey);
                                 const isSecret =
                                   envKey.includes('TOKEN') ||
                                   envKey.includes('SECRET') ||
@@ -1325,7 +1607,7 @@ export function PostDownloadPluginsCard() {
 
                                 return (
                                   <div
-                                    key={`${plugin.manifest.pluginId}-${envKey}`}
+                                    key={`${plugin.manifest.id}-${envKey}`}
                                     className="rounded-lg border border-border/60 px-3 py-3"
                                   >
                                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1350,7 +1632,7 @@ export function PostDownloadPluginsCard() {
                                         value={draftValue}
                                         onChange={(event) =>
                                           setEnvDraftValue(
-                                            plugin.manifest.pluginId,
+                                            plugin.manifest.id,
                                             envKey,
                                             event.target.value,
                                           )
@@ -1428,8 +1710,8 @@ export function PostDownloadPluginsCard() {
                       <SelectContent>
                         {availableWorkflowPlugins.map((plugin) => (
                           <SelectItem
-                            key={`${trigger}-${plugin.manifest.pluginId}`}
-                            value={plugin.manifest.pluginId}
+                            key={`${trigger}-${plugin.manifest.id}`}
+                            value={plugin.manifest.id}
                             className="text-xs"
                           >
                             {plugin.manifest.name}
@@ -1464,7 +1746,7 @@ export function PostDownloadPluginsCard() {
                     if (!plugin) return null;
                     return (
                       <div
-                        key={`${trigger}-${plugin.manifest.pluginId}`}
+                        key={`${trigger}-${plugin.manifest.id}`}
                         className="rounded-xl border border-border/60 bg-background/60 p-4"
                       >
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1490,7 +1772,7 @@ export function PostDownloadPluginsCard() {
                               variant="outline"
                               size="sm"
                               onClick={() =>
-                                handleMoveWorkflowStep(trigger, plugin.manifest.pluginId, -1)
+                                handleMoveWorkflowStep(trigger, plugin.manifest.id, -1)
                               }
                               disabled={index === 0}
                             >
@@ -1500,9 +1782,7 @@ export function PostDownloadPluginsCard() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() =>
-                                handleMoveWorkflowStep(trigger, plugin.manifest.pluginId, 1)
-                              }
+                              onClick={() => handleMoveWorkflowStep(trigger, plugin.manifest.id, 1)}
                               disabled={index === workflowPlugins.length - 1}
                             >
                               <MoveDown className="h-4 w-4" />
@@ -1511,9 +1791,7 @@ export function PostDownloadPluginsCard() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() =>
-                                handleRemoveWorkflowStep(trigger, plugin.manifest.pluginId)
-                              }
+                              onClick={() => handleRemoveWorkflowStep(trigger, plugin.manifest.id)}
                             >
                               <Trash2 className="h-4 w-4" />
                               {t('download.pluginWorkflowRemove')}
@@ -1540,7 +1818,7 @@ export function PostDownloadPluginsCard() {
                               onValueChange={(value) =>
                                 handleWorkflowFailurePolicy(
                                   trigger,
-                                  plugin.manifest.pluginId,
+                                  plugin.manifest.id,
                                   value as PluginWorkflowFailurePolicy,
                                 )
                               }
@@ -1569,40 +1847,287 @@ export function PostDownloadPluginsCard() {
         })}
       </div>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-[560px]">
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) {
+            setCreatePluginForm(DEFAULT_CREATE_PLUGIN_FORM);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[760px]">
           <DialogHeader>
             <DialogTitle>{t('download.pluginCreateDialogTitle')}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="max-h-[80vh] space-y-4 overflow-y-auto pr-1">
             <p className="text-sm text-muted-foreground">{t('download.pluginCreateDialogDesc')}</p>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium">{t('download.pluginCreateNameLabel')}</p>
-              <Input
-                value={newPluginName}
-                onChange={(event) => setNewPluginName(event.target.value)}
-                placeholder={t('download.pluginNamePlaceholder')}
-              />
+            <div className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+              <p className="text-sm font-medium">{t('download.pluginCreateDetailsTitle')}</p>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">{t('download.pluginCreateNameLabel')}</p>
+                  <Input
+                    value={createPluginForm.name}
+                    onChange={(event) => updateCreatePluginForm('name', event.target.value)}
+                    placeholder={t('download.pluginNamePlaceholder')}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">{t('download.pluginCreateIdLabel')}</p>
+                  <Input
+                    value={createPluginForm.id}
+                    onChange={(event) => updateCreatePluginForm('id', event.target.value)}
+                    placeholder={t('download.pluginCreateIdPlaceholder')}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">{t('download.pluginCreateSlugLabel')}</p>
+                  <Input
+                    value={createPluginForm.slug}
+                    onChange={(event) => updateCreatePluginForm('slug', event.target.value)}
+                    placeholder={t('download.pluginSlugPlaceholder')}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">{t('download.pluginVersionLabel')}</p>
+                  <Input
+                    value={createPluginForm.version}
+                    onChange={(event) => updateCreatePluginForm('version', event.target.value)}
+                    placeholder="0.1.0"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">{t('download.pluginLicenseLabel')}</p>
+                  <Input
+                    value={createPluginForm.license}
+                    onChange={(event) => updateCreatePluginForm('license', event.target.value)}
+                    placeholder="MIT"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t('download.pluginDescriptionLabel')}</p>
+                <Textarea
+                  value={createPluginForm.description}
+                  onChange={(event) => updateCreatePluginForm('description', event.target.value)}
+                  placeholder={t('download.pluginCreateDescriptionPlaceholder')}
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">{t('download.pluginAuthorLabel')}</p>
+                  <Input
+                    value={createPluginForm.author}
+                    onChange={(event) => updateCreatePluginForm('author', event.target.value)}
+                    placeholder={t('download.pluginCreateAuthorPlaceholder')}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">{t('download.pluginTimeoutLabel')}</p>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={createPluginForm.timeoutSec}
+                    onChange={(event) => updateCreatePluginForm('timeoutSec', event.target.value)}
+                    placeholder="60"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">{t('download.pluginHomepageLabel')}</p>
+                  <Input
+                    value={createPluginForm.homepage}
+                    onChange={(event) => updateCreatePluginForm('homepage', event.target.value)}
+                    placeholder="https://example.com"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">{t('download.pluginRepositoryLabel')}</p>
+                  <Input
+                    value={createPluginForm.repository}
+                    onChange={(event) => updateCreatePluginForm('repository', event.target.value)}
+                    placeholder="https://github.com/example/plugin"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium">{t('download.pluginCreateSlugLabel')}</p>
-              <Input
-                value={newPluginSlug}
-                onChange={(event) => setNewPluginSlug(event.target.value)}
-                placeholder={t('download.pluginSlugPlaceholder')}
-              />
+            <div className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{t('download.pluginCreateRuntimeTitle')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('download.pluginCreateRuntimeHelp')}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t('download.pluginSupportedProvidersLabel')}</p>
+                <div className="flex flex-wrap gap-2">
+                  {(['deno', 'node', 'bun'] as PluginProvider[]).map((provider) => {
+                    const selected = createPluginForm.supportedProviders.includes(provider);
+                    return (
+                      <button
+                        key={provider}
+                        type="button"
+                        onClick={() => toggleCreatePluginProvider(provider)}
+                        className={cn(
+                          'rounded-md border border-dashed px-3 py-1.5 text-xs transition-colors',
+                          selected
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border text-muted-foreground hover:bg-muted/60',
+                        )}
+                      >
+                        {PROVIDER_LABELS[provider]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t('download.pluginProviderTitle')}</p>
+                <Select
+                  value={createPluginForm.preferredProvider}
+                  onValueChange={(value) =>
+                    updateCreatePluginForm('preferredProvider', value as PluginProvider)
+                  }
+                >
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(createPluginForm.supportedProviders.length > 0
+                      ? createPluginForm.supportedProviders
+                      : DEFAULT_CREATE_PLUGIN_FORM.supportedProviders
+                    ).map((provider) => (
+                      <SelectItem key={provider} value={provider}>
+                        {PROVIDER_LABELS[provider]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t('download.pluginTriggersLabel')}</p>
+                <div className="flex flex-wrap gap-2">
+                  {WORKFLOW_TRIGGERS.map((trigger) => {
+                    const selected = createPluginForm.triggers.includes(trigger);
+                    return (
+                      <button
+                        key={trigger}
+                        type="button"
+                        onClick={() => toggleCreatePluginTrigger(trigger)}
+                        className={cn(
+                          'rounded-md border border-dashed px-3 py-1.5 text-xs transition-colors',
+                          selected
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border text-muted-foreground hover:bg-muted/60',
+                        )}
+                      >
+                        {t(`download.pluginWorkflowTrigger.${trigger}.title`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{t('download.pluginPermissionsTitle')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('download.pluginCreatePermissionsHelp')}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+                <span className="text-sm">{t('download.pluginPermissionNetwork')}</span>
+                <Switch
+                  checked={createPluginForm.permissionNetwork}
+                  onCheckedChange={(checked) =>
+                    updateCreatePluginForm('permissionNetwork', checked)
+                  }
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    {t('download.pluginPermissionReadPathsLabel')}
+                  </p>
+                  <Textarea
+                    value={createPluginForm.permissionReadPaths}
+                    onChange={(event) =>
+                      updateCreatePluginForm('permissionReadPaths', event.target.value)
+                    }
+                    placeholder={t('download.pluginCreateListPlaceholder')}
+                    rows={4}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    {t('download.pluginPermissionWritePathsLabel')}
+                  </p>
+                  <Textarea
+                    value={createPluginForm.permissionWritePaths}
+                    onChange={(event) =>
+                      updateCreatePluginForm('permissionWritePaths', event.target.value)
+                    }
+                    placeholder={t('download.pluginCreateListPlaceholder')}
+                    rows={4}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t('download.pluginPermissionEnvLabel')}</p>
+                <Textarea
+                  value={createPluginForm.permissionEnv}
+                  onChange={(event) => updateCreatePluginForm('permissionEnv', event.target.value)}
+                  placeholder={t('download.pluginCreateListPlaceholder')}
+                  rows={4}
+                />
+              </div>
             </div>
 
             <p className="text-xs text-muted-foreground">{t('download.pluginCreateHelp')}</p>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCreateOpen(false);
+                  setCreatePluginForm(DEFAULT_CREATE_PLUGIN_FORM);
+                }}
+                disabled={creating}
+              >
                 {t('download.pluginDismiss')}
               </Button>
-              <Button onClick={handleCreatePlugin} disabled={creating || !newPluginName.trim()}>
+              <Button
+                onClick={handleCreatePlugin}
+                disabled={creating || !createPluginForm.name.trim()}
+              >
                 <Plus className="h-4 w-4" />
                 {creating ? t('download.pluginCreating') : t('download.pluginCreate')}
               </Button>
@@ -1693,6 +2218,90 @@ export function PostDownloadPluginsCard() {
               <p className="mt-1">{t('download.pluginRuntimeGuideNoteSecondary')}</p>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={permissionDialogPlugin != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPermissionDialogPlugin(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>{t('download.pluginEnablePermissionsTitle')}</DialogTitle>
+          </DialogHeader>
+
+          {permissionDialogPlugin && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {t('download.pluginEnablePermissionsDesc', {
+                  name: permissionDialogPlugin.manifest.name,
+                })}
+              </p>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t('download.pluginRequestedPermissions')}</p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {[
+                    {
+                      key: 'network' as const,
+                      label: t('download.pluginPermissionNetwork'),
+                      enabled: permissionDialogPlugin.manifest.permissions.network,
+                    },
+                    {
+                      key: 'readPaths' as const,
+                      label: t('download.pluginPermissionReadPaths'),
+                      enabled: permissionDialogPlugin.manifest.permissions.readPaths.length > 0,
+                    },
+                    {
+                      key: 'writePaths' as const,
+                      label: t('download.pluginPermissionWritePaths'),
+                      enabled: permissionDialogPlugin.manifest.permissions.writePaths.length > 0,
+                    },
+                    {
+                      key: 'env' as const,
+                      label: t('download.pluginPermissionEnv'),
+                      enabled: permissionDialogPlugin.manifest.permissions.env.length > 0,
+                    },
+                  ]
+                    .filter((permission) => permission.enabled)
+                    .map((permission) => (
+                      <div
+                        key={permission.key}
+                        className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
+                      >
+                        <span className="text-sm">{permission.label}</span>
+                        <Switch
+                          checked={permissionDialogState[permission.key]}
+                          onCheckedChange={(checked) =>
+                            setPermissionDialogState((current) => ({
+                              ...current,
+                              [permission.key]: checked,
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                {t('download.pluginEnablePermissionsHelp')}
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setPermissionDialogPlugin(null)}>
+                  {t('download.pluginDismiss')}
+                </Button>
+                <Button onClick={handleEnablePluginWithPermissions}>
+                  {t('download.pluginEnableWithPermissions')}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
