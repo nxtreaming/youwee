@@ -235,6 +235,61 @@ const WORKFLOW_TRIGGERS = [
 ] as const;
 type WorkflowTrigger = (typeof WORKFLOW_TRIGGERS)[number];
 
+const WORKFLOW_TRIGGER_TONES: Record<
+  WorkflowTrigger,
+  {
+    cardClassName: string;
+    titleBadgeClassName: string;
+    titleClassName: string;
+    panelClassName: string;
+    emptyClassName: string;
+    stepClassName: string;
+    triggerButtonSelectedClassName: string;
+  }
+> = {
+  'download.queued': {
+    cardClassName: 'bg-gradient-to-br from-slate-500/[0.10] via-background to-background',
+    titleBadgeClassName: 'bg-slate-500/15 text-slate-700 dark:bg-slate-400/15 dark:text-slate-200',
+    titleClassName: 'text-slate-800 dark:text-slate-100',
+    panelClassName: 'border-slate-500/20 bg-background/70',
+    emptyClassName: 'border-slate-500/20 bg-background/65',
+    stepClassName: 'border-slate-500/20 bg-background/75',
+    triggerButtonSelectedClassName:
+      'border-slate-500/40 bg-slate-500/12 text-slate-700 dark:text-slate-200',
+  },
+  'download.beforeStart': {
+    cardClassName: 'bg-gradient-to-br from-amber-500/[0.12] via-background to-background',
+    titleBadgeClassName: 'bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300',
+    titleClassName: 'text-amber-900 dark:text-amber-100',
+    panelClassName: 'border-amber-500/20 bg-background/70',
+    emptyClassName: 'border-amber-500/20 bg-background/65',
+    stepClassName: 'border-amber-500/20 bg-background/75',
+    triggerButtonSelectedClassName:
+      'border-amber-500/45 bg-amber-500/12 text-amber-700 dark:text-amber-300',
+  },
+  'download.completed': {
+    cardClassName: 'bg-gradient-to-br from-emerald-500/[0.12] via-background to-background',
+    titleBadgeClassName:
+      'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300',
+    titleClassName: 'text-emerald-900 dark:text-emerald-100',
+    panelClassName: 'border-emerald-500/20 bg-background/70',
+    emptyClassName: 'border-emerald-500/20 bg-background/65',
+    stepClassName: 'border-emerald-500/20 bg-background/75',
+    triggerButtonSelectedClassName:
+      'border-emerald-500/45 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+  },
+  'download.failed': {
+    cardClassName: 'bg-gradient-to-br from-rose-500/[0.12] via-background to-background',
+    titleBadgeClassName: 'bg-rose-500/15 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300',
+    titleClassName: 'text-rose-900 dark:text-rose-100',
+    panelClassName: 'border-rose-500/20 bg-background/70',
+    emptyClassName: 'border-rose-500/20 bg-background/65',
+    stepClassName: 'border-rose-500/20 bg-background/75',
+    triggerButtonSelectedClassName:
+      'border-rose-500/45 bg-rose-500/12 text-rose-700 dark:text-rose-300',
+  },
+};
+
 const DEFAULT_CREATE_PLUGIN_FORM: CreatePluginFormState = {
   name: '',
   destinationRoot: '',
@@ -2041,11 +2096,22 @@ export function PostDownloadPluginsCard() {
           const workflowPlugins = workflowPluginsByTrigger[trigger] ?? [];
           const availableWorkflowPlugins = availableWorkflowPluginsByTrigger[trigger] ?? [];
           const candidateValue = workflowCandidates[trigger] ?? '';
+          const tone = WORKFLOW_TRIGGER_TONES[trigger];
 
           return (
-            <SettingsCard key={trigger} className="space-y-4">
+            <SettingsCard key={trigger} className={cn('space-y-4', tone.cardClassName)}>
               <div className="space-y-1">
-                <p className="text-sm font-medium">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={cn(
+                      'rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]',
+                      tone.titleBadgeClassName,
+                    )}
+                  >
+                    {t(`download.pluginWorkflowTrigger.${trigger}.title`)}
+                  </span>
+                </div>
+                <p className={cn('text-sm font-medium', tone.titleClassName)}>
                   {t(`download.pluginWorkflowTrigger.${trigger}.title`)}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -2053,7 +2119,7 @@ export function PostDownloadPluginsCard() {
                 </p>
               </div>
 
-              <div className="rounded-xl border border-dashed border-border/70 bg-background/40 p-4">
+              <div className={cn('rounded-xl border border-dashed p-4', tone.panelClassName)}>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
                   <div className="min-w-0 flex-1 space-y-2">
                     <p className="text-xs font-medium">{t('download.pluginWorkflowAddLabel')}</p>
@@ -2093,7 +2159,12 @@ export function PostDownloadPluginsCard() {
               </div>
 
               {workflowPlugins.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border/70 bg-background/40 px-4 py-6 text-center">
+                <div
+                  className={cn(
+                    'rounded-xl border border-dashed px-4 py-6 text-center',
+                    tone.emptyClassName,
+                  )}
+                >
                   <p className="text-sm font-medium">{t('download.pluginWorkflowEmptyTitle')}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {t('download.pluginWorkflowEmptyDesc')}
@@ -2106,12 +2177,17 @@ export function PostDownloadPluginsCard() {
                     return (
                       <div
                         key={`${trigger}-${plugin.manifest.id}`}
-                        className="rounded-xl border border-border/60 bg-background/60 p-4"
+                        className={cn('rounded-xl border p-4', tone.stepClassName)}
                       >
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div className="min-w-0 flex-1 space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded bg-blue-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                              <span
+                                className={cn(
+                                  'rounded px-2 py-0.5 text-[10px] uppercase tracking-wide',
+                                  tone.titleBadgeClassName,
+                                )}
+                              >
                                 {t('download.pluginWorkflowStepNumber', { index: index + 1 })}
                               </span>
                               <p className="truncate text-sm font-semibold">
@@ -2409,6 +2485,7 @@ export function PostDownloadPluginsCard() {
                 <div className="flex flex-wrap gap-2">
                   {WORKFLOW_TRIGGERS.map((trigger) => {
                     const selected = createPluginForm.triggers.includes(trigger);
+                    const tone = WORKFLOW_TRIGGER_TONES[trigger];
                     return (
                       <button
                         key={trigger}
@@ -2417,7 +2494,7 @@ export function PostDownloadPluginsCard() {
                         className={cn(
                           'rounded-md border border-dashed px-3 py-1.5 text-xs transition-colors',
                           selected
-                            ? 'border-primary bg-primary/10 text-primary'
+                            ? tone.triggerButtonSelectedClassName
                             : 'border-border text-muted-foreground hover:bg-muted/60',
                         )}
                       >
