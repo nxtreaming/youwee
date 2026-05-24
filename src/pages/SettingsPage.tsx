@@ -6,8 +6,10 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Coffee,
   Copy,
   Download,
+  ExternalLink,
   Eye,
   EyeOff,
   FileText,
@@ -787,6 +789,12 @@ function AboutSettingsContent({
   const [copied, setCopied] = useState(false);
 
   const appUrl = 'https://github.com/vanloctech/youwee';
+  const buyMeACoffeeUrl = 'https://buymeacoffee.com/vanloctech';
+  const redditUrl = 'https://www.reddit.com/r/youwee/';
+  const productHuntUrl =
+    'https://www.producthunt.com/products/youwee/reviews/new?utm_source=badge-product_review&utm_medium=badge&utm_source=badge-youwee';
+  const productHuntBadgeUrl =
+    'https://api.producthunt.com/widgets/embed-image/v1/product_review.svg?product_id=1154224&theme=light';
   const shareText = t('about.shareText');
   const encodedUrl = encodeURIComponent(appUrl);
   const encodedText = encodeURIComponent(shareText);
@@ -931,15 +939,6 @@ function AboutSettingsContent({
           {/* Quick Links */}
           <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-border/50">
             <a
-              href="https://github.com/vanloctech/youwee"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background/50 hover:bg-background text-xs font-medium transition-colors"
-            >
-              <Github className="w-3.5 h-3.5" />
-              GitHub
-            </a>
-            <a
               href="https://github.com/vanloctech/youwee/blob/main/LICENSE"
               target="_blank"
               rel="noopener noreferrer"
@@ -957,6 +956,81 @@ function AboutSettingsContent({
               <Bug className="w-3.5 h-3.5" />
               {t('about.reportIssue')}
             </a>
+          </div>
+
+          {/* Community */}
+          <div className="mt-4 pt-4 border-t border-border/50">
+            <div className="flex items-center gap-2 mb-2">
+              <Github className="w-4 h-4 text-muted-foreground" />
+              <p className="text-sm font-medium">{t('about.communityTitle')}</p>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">{t('about.communityDesc')}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href="https://github.com/vanloctech/youwee"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background/50 hover:bg-background text-xs font-medium transition-colors"
+              >
+                <Github className="w-3.5 h-3.5" />
+                GitHub
+              </a>
+              <a
+                href={redditUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background/50 hover:bg-background text-xs font-medium transition-colors text-orange-500"
+              >
+                <i className="fa fa-reddit text-[12px]" aria-hidden="true" />
+                Reddit
+              </a>
+            </div>
+            <div className="mt-3">
+              <a
+                href={productHuntUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex max-w-full"
+              >
+                <img
+                  src={productHuntBadgeUrl}
+                  alt={t('about.productHuntBadgeAlt')}
+                  width={250}
+                  height={54}
+                  className="h-[54px] w-[250px] max-w-full"
+                />
+              </a>
+            </div>
+          </div>
+
+          {/* Support */}
+          <div className="mt-4 pt-4 border-t border-border/50">
+            <div className="flex items-center gap-2 mb-2">
+              <Heart className="w-4 h-4 text-red-500" />
+              <p className="text-sm font-medium">{t('about.supportTitle')}</p>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">{t('about.supportDesc')}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href={buyMeACoffeeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group inline-flex min-h-14 items-center gap-3 rounded-md border border-dashed border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left transition-colors hover:bg-amber-500/15"
+              >
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                  <Coffee className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <span>{t('about.buyMeACoffee')}</span>
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-foreground" />
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                    {t('about.buyMeACoffeeDesc')}
+                  </p>
+                </div>
+              </a>
+            </div>
           </div>
 
           {/* Share */}
