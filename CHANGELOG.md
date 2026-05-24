@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-05-24
+
+### Changed
+- **Plugin workflow guidance and permissions flow** - Refined plugin import, permission approval, workspace guide, and configuration UI so plugin setup, workflow assignment, and plugin guides are clearer inside Settings
+- **Plugin authoring flexibility** - Updated workspace and SDK integration to support flexible Lucide plugin icons and a cleaner Deno runtime test flow for plugin authors
+
+### Fixed
+- **Plugin runtime logs and output summaries** - Reduced duplicated plugin log noise, skipped storing raw result protocol output, and highlighted follow-up output file paths more clearly in post-processing step logs
+- **Plugin guide rendering and localized docs** - Fixed guide dialog overflow and preserved localized `README.<locale>.md` files for installed plugins
+- **Plugin configuration polish** - Improved multi-select configuration controls, validation timing, and plugin enable/import prompts to better match the rest of the app UI
+
 ## [0.14.0] - 2026-05-24
 
 ### Added
