@@ -252,12 +252,7 @@ export function MetadataPage() {
           )}
 
           {/* Settings Bar - Always visible */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3 rounded-xl bg-muted/30 border border-border/50">
-            {/* What to download label */}
-            <span className="text-xs font-medium text-muted-foreground">
-              {t('whatToDownload')}:
-            </span>
-
+          <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border/50">
             {/* Option toggles - compact inline */}
             <button
               type="button"
@@ -265,7 +260,7 @@ export function MetadataPage() {
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all',
                 settings.writeInfoJson
-                  ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30'
+                  ? 'bg-primary/10 text-primary border border-primary/30'
                   : 'bg-background/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50',
               )}
             >
@@ -279,7 +274,7 @@ export function MetadataPage() {
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all',
                 settings.writeDescription
-                  ? 'bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/30'
+                  ? 'bg-primary/10 text-primary border border-primary/30'
                   : 'bg-background/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50',
               )}
             >
@@ -293,7 +288,7 @@ export function MetadataPage() {
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all',
                 settings.writeComments
-                  ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30'
+                  ? 'bg-primary/10 text-primary border border-primary/30'
                   : 'bg-background/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50',
               )}
             >
@@ -307,7 +302,7 @@ export function MetadataPage() {
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all',
                 settings.writeThumbnail
-                  ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30'
+                  ? 'bg-primary/10 text-primary border border-primary/30'
                   : 'bg-background/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50',
               )}
             >
@@ -323,7 +318,7 @@ export function MetadataPage() {
                   className={cn(
                     'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all',
                     settings.writeSubtitles
-                      ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30'
+                      ? 'bg-primary/10 text-primary border border-primary/30'
                       : 'bg-background/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50',
                   )}
                 >
