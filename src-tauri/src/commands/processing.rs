@@ -11,7 +11,9 @@ use tokio::sync::Mutex;
 
 use crate::database::get_db;
 use crate::services::{generate_raw, get_ffmpeg_path, AIConfig};
-use crate::utils::{args_to_display_command, validate_ffmpeg_args, CommandExt};
+use crate::utils::{
+    args_to_display_command, parse_ffmpeg_command_args, validate_ffmpeg_args, CommandExt,
+};
 
 #[path = "processing/attachments.rs"]
 mod attachments;
@@ -29,44 +31,6 @@ pub use preview::*;
 
 static ACTIVE_JOBS: LazyLock<Mutex<HashMap<String, tokio::sync::oneshot::Sender<()>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-
-fn parse_shell_command(cmd: &str) -> Vec<String> {
-    let mut args = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
-    let mut quote_char = ' ';
-    let mut chars = cmd.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        match c {
-            '"' | '\'' if !in_quotes => {
-                in_quotes = true;
-                quote_char = c;
-            }
-            c if in_quotes && c == quote_char => {
-                in_quotes = false;
-            }
-            '\\' if chars.peek() == Some(&'"') || chars.peek() == Some(&'\'') => {
-                if let Some(next) = chars.next() {
-                    current.push(next);
-                }
-            }
-            ' ' | '\t' if !in_quotes => {
-                if !current.is_empty() {
-                    args.push(current.clone());
-                    current.clear();
-                }
-            }
-            _ => current.push(c),
-        }
-    }
-
-    if !current.is_empty() {
-        args.push(current);
-    }
-
-    args
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoMetadata {
@@ -616,6 +580,7 @@ If the request is NOT related to video/audio processing (e.g., general chat, que
 6. Include -progress pipe:2 for progress tracking (outputs to stderr)
 7. IMPORTANT: Use the exact full path provided above for input and output files
 8. Wrap file paths in double quotes
+9. Return one ffmpeg command only. Do not use shell wrappers, shell operators, redirection, or command substitution.
 
 ## Response Format (JSON only, no markdown outside)
 For valid video requests:
@@ -707,14 +672,7 @@ For valid video requests:
         .ok_or("No command in response")?
         .replace("{input}", &input_path);
 
-    let all_args = parse_shell_command(&command);
-    let command_args: Vec<String> = if all_args.first().map(|s| s.as_str()) == Some("ffmpeg") {
-        all_args[1..].to_vec()
-    } else {
-        all_args
-    };
-
-    validate_ffmpeg_args(&command_args)?;
+    let command_args = parse_ffmpeg_command_args(&command)?;
 
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
     let input_stem = Path::new(&input_path)

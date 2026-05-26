@@ -73,6 +73,12 @@ fn normalize_douyin(url: &str) -> Option<String> {
 /// This is a defense-in-depth measure for AI-generated commands.
 pub fn validate_ffmpeg_args(args: &[String]) -> Result<(), String> {
     for arg in args {
+        if arg.contains('\0') {
+            return Err("Invalid NUL byte in ffmpeg argument".to_string());
+        }
+        if matches!(arg.as_str(), "&&" | "||" | ";" | "|" | ">" | ">>" | "<") {
+            return Err(format!("Shell control operator is not allowed: {}", arg));
+        }
         // Block shell injection patterns (shouldn't appear in ffmpeg args)
         if arg.contains('`') || arg.contains("$(") {
             return Err(format!("Dangerous pattern in ffmpeg argument: {}", arg));
@@ -86,6 +92,102 @@ pub fn validate_ffmpeg_args(args: &[String]) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Parse an AI-generated FFmpeg command into argv safely.
+///
+/// Youwee never executes this string through a shell, but parsing still rejects
+/// unquoted shell control syntax so malicious model output cannot be carried
+/// forward as a plausible command.
+pub fn parse_ffmpeg_command_args(command: &str) -> Result<Vec<String>, String> {
+    let tokens = tokenize_command(command)?;
+    let program = tokens
+        .first()
+        .ok_or_else(|| "FFmpeg command cannot be empty".to_string())?;
+
+    if !is_ffmpeg_program(program) {
+        return Err("AI response must generate an ffmpeg command only.".to_string());
+    }
+
+    let args = tokens[1..].to_vec();
+    validate_ffmpeg_args(&args)?;
+    Ok(args)
+}
+
+fn is_ffmpeg_program(program: &str) -> bool {
+    let normalized = program.trim_matches('"').trim_matches('\'');
+    std::path::Path::new(normalized)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.eq_ignore_ascii_case("ffmpeg") || name.eq_ignore_ascii_case("ffmpeg.exe"))
+        .unwrap_or(false)
+}
+
+fn tokenize_command(command: &str) -> Result<Vec<String>, String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut chars = command.chars().peekable();
+    let mut quote: Option<char> = None;
+
+    while let Some(c) = chars.next() {
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(q) => {
+                if c == '\n' || c == '\r' || c == '\0' {
+                    return Err("Invalid control character in ffmpeg command".to_string());
+                }
+                if q == '"' && c == '\\' {
+                    if let Some(next) = chars.peek().copied() {
+                        if matches!(next, '"' | '\\') {
+                            current.push(chars.next().unwrap());
+                            continue;
+                        }
+                    }
+                }
+                current.push(c);
+            }
+            None => match c {
+                '"' | '\'' => quote = Some(c),
+                ' ' | '\t' => {
+                    if !current.is_empty() {
+                        args.push(std::mem::take(&mut current));
+                    }
+                }
+                '\n' | '\r' | '\0' => {
+                    return Err("Invalid control character in ffmpeg command".to_string());
+                }
+                ';' | '|' | '&' | '<' | '>' => {
+                    return Err(format!(
+                        "Shell control syntax is not allowed in ffmpeg command: {}",
+                        c
+                    ));
+                }
+                '`' => {
+                    return Err("Command substitution is not allowed in ffmpeg command".to_string());
+                }
+                '$' if chars.peek() == Some(&'(') => {
+                    return Err("Command substitution is not allowed in ffmpeg command".to_string());
+                }
+                '\\' => {
+                    if let Some(next) = chars.next() {
+                        current.push(next);
+                    } else {
+                        current.push(c);
+                    }
+                }
+                _ => current.push(c),
+            },
+        }
+    }
+
+    if quote.is_some() {
+        return Err("Unclosed quote in ffmpeg command".to_string());
+    }
+    if !current.is_empty() {
+        args.push(current);
+    }
+
+    Ok(args)
 }
 
 /// Convert a Vec of ffmpeg args into a display-friendly command string.
@@ -203,5 +305,59 @@ mod tests {
     #[test]
     fn empty_url_unchanged() {
         assert_eq!(normalize_url(""), "");
+    }
+
+    #[test]
+    fn parse_ffmpeg_command_accepts_quoted_paths_and_filters() {
+        let args = parse_ffmpeg_command_args(
+            r#"ffmpeg -y -i "/tmp/Input File.mp4" -filter_complex "[0:v]scale=1280:-1[v];[0:a]anull[a]" -map "[v]" "/tmp/output file.mp4""#,
+        )
+        .expect("valid ffmpeg command should parse");
+
+        assert_eq!(args[0], "-y");
+        assert_eq!(args[2], "/tmp/Input File.mp4");
+        assert!(args.contains(&"[0:v]scale=1280:-1[v];[0:a]anull[a]".to_string()));
+        assert_eq!(args.last().unwrap(), "/tmp/output file.mp4");
+    }
+
+    #[test]
+    fn parse_ffmpeg_command_allows_full_ffmpeg_binary_path() {
+        let args = parse_ffmpeg_command_args(r#"/usr/local/bin/ffmpeg -i input.mp4 output.mp4"#)
+            .expect("ffmpeg basename should be accepted");
+
+        assert_eq!(args, vec!["-i", "input.mp4", "output.mp4"]);
+    }
+
+    #[test]
+    fn parse_ffmpeg_command_rejects_shell_injection_operators() {
+        let err = parse_ffmpeg_command_args("ffmpeg -i input.mp4 output.mp4 && rm -rf /")
+            .expect_err("shell operator should be rejected");
+
+        assert!(err.contains("Shell control syntax"));
+    }
+
+    #[test]
+    fn parse_ffmpeg_command_rejects_non_ffmpeg_program() {
+        let err = parse_ffmpeg_command_args(r#"bash -c "rm -rf /""#)
+            .expect_err("non-ffmpeg command should be rejected");
+
+        assert!(err.contains("ffmpeg command only"));
+    }
+
+    #[test]
+    fn parse_ffmpeg_command_rejects_command_substitution() {
+        let err = parse_ffmpeg_command_args("ffmpeg -i $(touch /tmp/pwned) output.mp4")
+            .expect_err("command substitution should be rejected");
+
+        assert!(err.contains("Command substitution"));
+    }
+
+    #[test]
+    fn validate_ffmpeg_args_rejects_shell_operator_arg() {
+        let err =
+            validate_ffmpeg_args(&["-i".to_string(), "input.mp4".to_string(), "&&".to_string()])
+                .expect_err("operator arg should be rejected");
+
+        assert!(err.contains("Shell control operator"));
     }
 }
