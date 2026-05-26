@@ -167,15 +167,6 @@ const PLUGIN_BASE_ENV_KEYS: &[&str] = &[
     "YOUWEE_PLUGIN_PROVIDER_SOURCE",
     "YOUWEE_FFMPEG_PATH",
     "YOUWEE_YTDLP_PATH",
-    "YOUWEE_AI_ENABLED",
-    "YOUWEE_AI_PROVIDER",
-    "YOUWEE_AI_MODEL",
-    "YOUWEE_AI_TIMEOUT_SECONDS",
-    "YOUWEE_AI_SUMMARY_STYLE",
-    "YOUWEE_AI_SUMMARY_LANGUAGE",
-    "YOUWEE_AI_WHISPER_ENABLED",
-    "YOUWEE_AI_WHISPER_ENDPOINT_URL",
-    "YOUWEE_AI_WHISPER_MODEL",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -947,9 +938,6 @@ async fn execute_plugin(
     let ytdlp_path = crate::services::get_ytdlp_path(app)
         .await
         .map(|(path, _)| path.to_string_lossy().to_string());
-    let ai_config = crate::commands::get_ai_config(app.clone())
-        .await
-        .unwrap_or_default();
 
     let payload_json = serde_json::to_vec(payload)
         .map_err(|e| format!("Failed to serialize plugin payload: {}", e))?;
@@ -1116,52 +1104,6 @@ async fn execute_plugin(
         if let Some(path) = ytdlp_path.as_ref() {
             cmd.env("YOUWEE_YTDLP_PATH", path);
         }
-    }
-    cmd.env(
-        "YOUWEE_AI_ENABLED",
-        if ai_config.enabled { "true" } else { "false" },
-    );
-    cmd.env(
-        "YOUWEE_AI_PROVIDER",
-        serde_json::to_value(&ai_config.provider)
-            .ok()
-            .and_then(|value| value.as_str().map(|value| value.to_string()))
-            .unwrap_or_else(|| "gemini".to_string()),
-    );
-    cmd.env("YOUWEE_AI_MODEL", &ai_config.model);
-    if let Some(value) = ai_config.proxy_url.as_ref() {
-        cmd.env("YOUWEE_AI_PROXY_URL", value);
-    }
-    if let Some(value) = ai_config.ollama_url.as_ref() {
-        cmd.env("YOUWEE_AI_OLLAMA_URL", value);
-    }
-    if let Some(value) = ai_config.lmstudio_url.as_ref() {
-        cmd.env("YOUWEE_AI_LMSTUDIO_URL", value);
-    }
-    if let Some(value) = ai_config.timeout_seconds {
-        cmd.env("YOUWEE_AI_TIMEOUT_SECONDS", value.to_string());
-    }
-    cmd.env(
-        "YOUWEE_AI_SUMMARY_STYLE",
-        serde_json::to_value(&ai_config.summary_style)
-            .ok()
-            .and_then(|value| value.as_str().map(|value| value.to_string()))
-            .unwrap_or_else(|| "concise".to_string()),
-    );
-    cmd.env("YOUWEE_AI_SUMMARY_LANGUAGE", &ai_config.summary_language);
-    cmd.env(
-        "YOUWEE_AI_WHISPER_ENABLED",
-        if ai_config.whisper_enabled {
-            "true"
-        } else {
-            "false"
-        },
-    );
-    if let Some(value) = ai_config.whisper_endpoint_url.as_ref() {
-        cmd.env("YOUWEE_AI_WHISPER_ENDPOINT_URL", value);
-    }
-    if let Some(value) = ai_config.whisper_model.as_ref() {
-        cmd.env("YOUWEE_AI_WHISPER_MODEL", value);
     }
     for (key, value) in &resolved_config_values {
         let serialized = match value {

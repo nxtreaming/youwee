@@ -48,32 +48,27 @@ export function readAIConfigFromEnv(): InternalAIConfig {
 }
 
 export function createAIBridge(logger?: LoggerLike): AIBridge {
-  const config = readAIConfigFromEnv();
-
   return {
     available() {
-      return Boolean(config.enabled && config.provider && config.model);
+      return false;
     },
 
     getConfig() {
       return {
-        enabled: config.enabled,
-        provider: config.provider,
-        model: config.model,
-        timeoutSeconds: config.timeoutSeconds,
-        summaryStyle: config.summaryStyle,
-        summaryLanguage: config.summaryLanguage,
-        whisperEnabled: config.whisperEnabled,
-        hasApiKey: config.hasApiKey,
-        hasWhisperApiKey: config.hasWhisperApiKey,
+        enabled: false,
+        provider: null,
+        model: null,
+        timeoutSeconds: 120,
+        summaryStyle: 'concise',
+        summaryLanguage: 'auto',
+        whisperEnabled: false,
+        hasApiKey: false,
+        hasWhisperApiKey: false,
       };
     },
 
     async generateText(_options) {
-      logger?.info?.('Blocked plugin AI helper without delegated app bridge', {
-        provider: config.provider,
-        model: config.model,
-      });
+      logger?.info?.('Blocked plugin AI helper without delegated app bridge');
       throw new Error(
         'Plugin AI helpers are disabled until Youwee provides a delegated AI bridge without exposing API keys.',
       );

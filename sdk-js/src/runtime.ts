@@ -111,12 +111,6 @@ function createCommandRunner(toolName: string, pathEnvName: string): ToolRunner 
 function createProcessEnv(overrides: Record<string, string> = {}): Record<string, string> {
   const env: Record<string, string> = {};
 
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === 'string' && !STRIP_SUBPROCESS_ENV_KEYS.has(key)) {
-      env[key] = value;
-    }
-  }
-
   for (const [key, value] of Object.entries(overrides)) {
     if (!STRIP_SUBPROCESS_ENV_KEYS.has(key)) {
       env[key] = value;
