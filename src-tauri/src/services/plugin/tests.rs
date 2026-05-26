@@ -30,9 +30,13 @@ fn classify_plugin_runtime_error_formats_env_error_for_users() {
 
     assert_eq!(err.kind, "env");
     assert_eq!(err.resource.as_deref(), Some("YOUWEE_AI_PROXY_URL"));
+    assert_eq!(err.resource_label.as_deref(), Some("AI proxy setting"));
     assert!(err.user_message.contains("AI helpers are disabled"));
+    assert!(err.user_message.contains("AI proxy setting"));
+    assert!(!err.user_message.contains("YOUWEE_AI_PROXY_URL"));
     assert!(!err.user_message.contains("--allow-env"));
     assert!(err.technical_details.contains("Deno runtime permission error"));
+    assert!(err.technical_details.contains("YOUWEE_AI_PROXY_URL"));
 }
 
 #[test]
@@ -44,6 +48,7 @@ fn classify_plugin_runtime_error_formats_run_error_for_users() {
 
     assert_eq!(err.kind, "run");
     assert_eq!(err.resource.as_deref(), Some("/bin/sh"));
+    assert_eq!(err.resource_label.as_deref(), Some("/bin/sh"));
     assert!(err.user_message.contains("not approved"));
     assert!(!err.user_message.contains("--allow-run"));
 }

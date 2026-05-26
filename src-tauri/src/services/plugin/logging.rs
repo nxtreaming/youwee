@@ -8,6 +8,7 @@ use crate::types::{PluginExecutionOutputEvent, PluginExecutionResult};
 pub(super) struct PluginRuntimeError {
     pub(super) kind: String,
     pub(super) resource: Option<String>,
+    pub(super) resource_label: Option<String>,
     pub(super) user_message: String,
     pub(super) technical_details: String,
 }
@@ -276,21 +277,25 @@ pub(super) fn classify_plugin_runtime_error(stderr: &str) -> Option<PluginRuntim
         .map(str::trim)
         .find(|line| line.starts_with("Requires "))?;
 
-    let (kind, resource, user_message) =
+    let (kind, resource, resource_label, user_message) =
         if let Some(resource) = extract_quoted_resource(line, "Requires env access to ") {
+            let resource_label = friendly_env_resource_label(&resource);
             let user_message = if resource.starts_with("YOUWEE_AI_") {
                 format!(
-                    "Plugin AI helpers are disabled for security. The plugin tried to read internal Youwee AI setting {resource} directly."
+                    "Plugin AI helpers are disabled for security. The plugin tried to read Youwee's {} directly.",
+                    resource_label.as_deref().unwrap_or("AI setting")
                 )
             } else {
                 format!(
-                    "This plugin tried to read environment variable {resource}, but Youwee did not allow that access."
+                    "This plugin tried to read {}, but Youwee did not allow that access.",
+                    resource_label.as_deref().unwrap_or("an environment setting")
                 )
             };
-            ("env".to_string(), Some(resource), user_message)
+            ("env".to_string(), Some(resource), resource_label, user_message)
         } else if let Some(resource) = extract_prefixed_resource(line, "Requires read access to ") {
             (
                 "read".to_string(),
+                Some(resource.clone()),
                 Some(resource.clone()),
                 format!(
                     "This plugin tried to read {resource}, but that path is outside its approved read permissions."
@@ -300,6 +305,7 @@ pub(super) fn classify_plugin_runtime_error(stderr: &str) -> Option<PluginRuntim
             (
                 "write".to_string(),
                 Some(resource.clone()),
+                Some(resource.clone()),
                 format!(
                     "This plugin tried to write to {resource}, but that path is outside its approved write permissions."
                 ),
@@ -308,6 +314,7 @@ pub(super) fn classify_plugin_runtime_error(stderr: &str) -> Option<PluginRuntim
             (
                 "run".to_string(),
                 Some(resource.clone()),
+                Some(resource.clone()),
                 format!(
                     "This plugin tried to run {resource}, but that command or tool is not approved."
                 ),
@@ -315,6 +322,7 @@ pub(super) fn classify_plugin_runtime_error(stderr: &str) -> Option<PluginRuntim
         } else if line.starts_with("Requires net access") {
             (
                 "net".to_string(),
+                None,
                 None,
                 "This plugin tried to access the network, but network permission is not approved."
                     .to_string(),
@@ -326,9 +334,28 @@ pub(super) fn classify_plugin_runtime_error(stderr: &str) -> Option<PluginRuntim
     Some(PluginRuntimeError {
         kind,
         resource,
+        resource_label,
         user_message,
         technical_details: format!("Deno runtime permission error:\n{line}"),
     })
+}
+
+fn friendly_env_resource_label(resource: &str) -> Option<String> {
+    let label = match resource {
+        "YOUWEE_AI_PROXY_URL" => "AI proxy setting",
+        "YOUWEE_AI_OLLAMA_URL" => "Ollama AI endpoint",
+        "YOUWEE_AI_LMSTUDIO_URL" => "LM Studio AI endpoint",
+        "YOUWEE_AI_WHISPER_ENDPOINT_URL" => "Whisper endpoint",
+        "YOUWEE_FFMPEG_PATH" => "FFmpeg tool path",
+        "YOUWEE_YTDLP_PATH" => "yt-dlp tool path",
+        "YOUWEE_PLUGIN_CONFIG_JSON" => "plugin configuration",
+        "YOUWEE_PLUGIN_PROVIDER_SOURCE" => "plugin runtime provider source",
+        "YOUWEE_APP_LOCALE" => "app language setting",
+        "YOUWEE_APP_FALLBACK_LOCALE" => "app fallback language setting",
+        "YOUWEE_APP_DIRECTION" => "app text direction setting",
+        _ => return None,
+    };
+    Some(label.to_string())
 }
 
 fn extract_quoted_resource(line: &str, prefix: &str) -> Option<String> {

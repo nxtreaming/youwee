@@ -1282,7 +1282,7 @@ async fn execute_plugin(
                 runtime_error.user_message,
                 runtime_error.technical_details,
                 runtime_error.kind,
-                runtime_error.resource,
+                runtime_error.resource_label.or(runtime_error.resource),
             ));
         }
 
