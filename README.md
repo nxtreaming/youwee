@@ -50,28 +50,30 @@
 - **Fast & Lightweight** — Built with Tauri for minimal resource usage
 
 ## Screenshots
-![Youwee](docs/screenshots/youwee-1.png)
+![Youwee](docs/screenshots/youwee-youtube.png)
 
 <details>
 <summary><strong>More Screenshots</strong></summary>
 
-![Youwee - Library](docs/screenshots/youwee-2.png)
-![Youwee - AI Summary](docs/screenshots/youwee-3.png)
-![Youwee - Processing](docs/screenshots/youwee-4.png)
-![Youwee - Settings](docs/screenshots/youwee-5.png)
-![Youwee - Themes](docs/screenshots/youwee-6.png)
-![Youwee - About](docs/screenshots/youwee-7.png)
-![Youwee - Download](docs/screenshots/youwee-8.png)
-![Youwee - Universal](docs/screenshots/youwee-9.png)
-![Youwee - Metadata](docs/screenshots/youwee-10.png)
-![Youwee - History](docs/screenshots/youwee-11.png)
-![Youwee - Channel Follow](docs/screenshots/youwee-12.png)
-![Youwee - Channel Polling](docs/screenshots/youwee-13.png)
-![Youwee - Queue & Processing](docs/screenshots/youwee-14.png)
-![Youwee - Language Vote](docs/screenshots/youwee-15.png)
-![Youwee - Subtitle Workshop](docs/screenshots/youwee-16.png)
-![Youwee - Subtitle Timeline & QC](docs/screenshots/youwee-17.png)
-![Youwee - Browser Extension](docs/screenshots/youwee-18.png)
+![Youwee - Universal](docs/screenshots/youwee-universal.png)
+![Youwee - Gallery](docs/screenshots/youwee-gallery.png)
+![Youwee - Channels](docs/screenshots/youwee-channels.png)
+![Youwee - AI Summary](docs/screenshots/youwee-ai-summary.png)
+![Youwee - Processing 1](docs/screenshots/youwee-processing.png)
+![Youwee - Processing 2](docs/screenshots/youwee-processing-2.png)
+![Youwee - Subtitles](docs/screenshots/youwee-subtitles.png)
+![Youwee - Metadata](docs/screenshots/youwee-metadata.png)
+![Youwee - Library](docs/screenshots/youwee-library.png)
+![Youwee - Logs](docs/screenshots/youwee-logs.png)
+![Youwee - Setting - General](docs/screenshots/youwee-setting-general.png)
+![Youwee - Setting - Dependencies](docs/screenshots/youwee-setting-dependencies.png)
+![Youwee - Setting - Download](docs/screenshots/youwee-setting-download.png)
+![Youwee - Setting - Plugin](docs/screenshots/youwee-setting-plugins.png)
+![Youwee - Setting - Extension](docs/screenshots/youwee-setting-extension.png)
+![Youwee - Setting - AI Features](docs/screenshots/youwee-setting-ai-features.png)
+![Youwee - Setting - Network & Auth](docs/screenshots/youwee-setting-network-auth.png)
+![Youwee - Setting - About](docs/screenshots/youwee-setting-about.png)
+![Youwee - Browser Extension](docs/screenshots/youwee-extension-chrome-firefox.png)
 
 </details>
 

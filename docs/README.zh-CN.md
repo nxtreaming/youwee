@@ -46,28 +46,30 @@
 
 ## 截图
 
-![Youwee](screenshots/youwee-1.png)
+![Youwee](screenshots/youwee-youtube.png)
 
 <details>
 <summary><strong>更多截图</strong></summary>
 
-![Youwee - 媒体库](screenshots/youwee-2.png)
-![Youwee - AI 摘要](screenshots/youwee-3.png)
-![Youwee - 视频处理](screenshots/youwee-4.png)
-![Youwee - 设置](screenshots/youwee-5.png)
-![Youwee - 主题](screenshots/youwee-6.png)
-![Youwee - 关于](screenshots/youwee-7.png)
-![Youwee - 下载](screenshots/youwee-8.png)
-![Youwee - Universal](screenshots/youwee-9.png)
-![Youwee - 元数据](screenshots/youwee-10.png)
-![Youwee - 历史记录](screenshots/youwee-11.png)
-![Youwee - 频道关注](screenshots/youwee-12.png)
-![Youwee - 频道轮询](screenshots/youwee-13.png)
-![Youwee - 队列与处理](screenshots/youwee-14.png)
-![Youwee - 语言投票](screenshots/youwee-15.png)
-![Youwee - 字幕工坊](screenshots/youwee-16.png)
-![Youwee - 字幕时间轴与质检](screenshots/youwee-17.png)
-![Youwee - Browser Extension](docs/screenshots/youwee-18.png)
+![Youwee - Universal](screenshots/youwee-universal.png)
+![Youwee - Gallery](screenshots/youwee-gallery.png)
+![Youwee - Channels](screenshots/youwee-channels.png)
+![Youwee - AI Summary](screenshots/youwee-ai-summary.png)
+![Youwee - Processing 1](screenshots/youwee-processing.png)
+![Youwee - Processing 2](screenshots/youwee-processing-2.png)
+![Youwee - Subtitles](screenshots/youwee-subtitles.png)
+![Youwee - Metadata](screenshots/youwee-metadata.png)
+![Youwee - Library](screenshots/youwee-library.png)
+![Youwee - Logs](screenshots/youwee-logs.png)
+![Youwee - Setting - General](screenshots/youwee-setting-general.png)
+![Youwee - Setting - Dependencies](screenshots/youwee-setting-dependencies.png)
+![Youwee - Setting - Download](screenshots/youwee-setting-download.png)
+![Youwee - Setting - Plugin](screenshots/youwee-setting-plugins.png)
+![Youwee - Setting - Extension](screenshots/youwee-setting-extension.png)
+![Youwee - Setting - AI Features](screenshots/youwee-setting-ai-features.png)
+![Youwee - Setting - Network & Auth](screenshots/youwee-setting-network-auth.png)
+![Youwee - Setting - About](screenshots/youwee-setting-about.png)
+![Youwee - Browser Extension](screenshots/youwee-extension-chrome-firefox.png)
 
 </details>
 

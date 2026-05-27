@@ -46,28 +46,30 @@
 
 ## Ảnh chụp màn hình
 
-![Youwee](screenshots/youwee-1.png)
+![Youwee](screenshots/youwee-youtube.png)
 
 <details>
 <summary><strong>Xem thêm ảnh</strong></summary>
 
-![Youwee - Thư viện](screenshots/youwee-2.png)
-![Youwee - Tóm tắt AI](screenshots/youwee-3.png)
-![Youwee - Xử lý](screenshots/youwee-4.png)
-![Youwee - Cài đặt](screenshots/youwee-5.png)
-![Youwee - Giao diện](screenshots/youwee-6.png)
-![Youwee - Giới thiệu](screenshots/youwee-7.png)
-![Youwee - Tải xuống](screenshots/youwee-8.png)
-![Youwee - Universal](screenshots/youwee-9.png)
-![Youwee - Metadata](screenshots/youwee-10.png)
-![Youwee - Lịch sử](screenshots/youwee-11.png)
-![Youwee - Theo dõi kênh](screenshots/youwee-12.png)
-![Youwee - Polling kênh](screenshots/youwee-13.png)
-![Youwee - Hàng đợi & Xử lý](screenshots/youwee-14.png)
-![Youwee - Bình chọn ngôn ngữ](screenshots/youwee-15.png)
-![Youwee - Xưởng phụ đề](screenshots/youwee-16.png)
-![Youwee - Timeline & QC phụ đề](screenshots/youwee-17.png)
-![Youwee - Extension cho trình duyệt](docs/screenshots/youwee-18.png)
+![Youwee - Universal](screenshots/youwee-universal.png)
+![Youwee - Gallery](screenshots/youwee-gallery.png)
+![Youwee - Channels](screenshots/youwee-channels.png)
+![Youwee - AI Summary](screenshots/youwee-ai-summary.png)
+![Youwee - Processing 1](screenshots/youwee-processing.png)
+![Youwee - Processing 2](screenshots/youwee-processing-2.png)
+![Youwee - Subtitles](screenshots/youwee-subtitles.png)
+![Youwee - Metadata](screenshots/youwee-metadata.png)
+![Youwee - Library](screenshots/youwee-library.png)
+![Youwee - Logs](screenshots/youwee-logs.png)
+![Youwee - Setting - General](screenshots/youwee-setting-general.png)
+![Youwee - Setting - Dependencies](screenshots/youwee-setting-dependencies.png)
+![Youwee - Setting - Download](screenshots/youwee-setting-download.png)
+![Youwee - Setting - Plugin](screenshots/youwee-setting-plugins.png)
+![Youwee - Setting - Extension](screenshots/youwee-setting-extension.png)
+![Youwee - Setting - AI Features](screenshots/youwee-setting-ai-features.png)
+![Youwee - Setting - Network & Auth](screenshots/youwee-setting-network-auth.png)
+![Youwee - Setting - About](screenshots/youwee-setting-about.png)
+![Youwee - Browser Extension](screenshots/youwee-extension-chrome-firefox.png)
 
 </details>
 
