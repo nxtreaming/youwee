@@ -11,7 +11,6 @@ import {
   Loader2,
   MonitorPlay,
   Pencil,
-  Play,
   RefreshCw,
   Scissors,
   Sparkles,
@@ -359,15 +358,6 @@ export function UniversalQueueItem({
 
         {/* Error Overlay */}
         {isError && <ThumbnailFailedBadge />}
-
-        {/* Pending Overlay */}
-        {isPending && (
-          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-              <Play className="w-5 h-5 text-black ml-0.5" />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Content */}
