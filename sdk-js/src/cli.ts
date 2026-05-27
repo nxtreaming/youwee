@@ -19,7 +19,7 @@ Usage:
 
 Commands:
   build   Validate and bundle the plugin into dist/plugin.cjs
-  pack    Build, sign, and package the plugin into release/<slug>-<version>.ywp
+  pack    Build, sign, and package the plugin into release/<slug>.ywp
   keygen  Create a new ed25519 signing key file
   verify  Verify the signature and checksums of a .ywp plugin file
 `);

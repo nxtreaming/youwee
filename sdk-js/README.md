@@ -282,7 +282,7 @@ bunx youwee-sdk pack --private-key ./plugin.youwee-plugin-key.json
 This produces:
 
 ```text
-release/<slug>-<version>.ywp
+release/<slug>.ywp
 ```
 
 ## GitHub Actions in scaffolded workspaces
@@ -841,7 +841,7 @@ Pack does the following:
 3. creates `build.json`
 4. creates `checksums.json`
 5. creates `signature.json`
-6. writes `release/<slug>-<version>.ywp`
+6. writes `release/<slug>.ywp`
 
 ---
 
