@@ -51,9 +51,7 @@ use logging::{
 #[cfg(test)]
 use manifest::validate_manifest;
 use manifest::{load_installed_manifest_from_dir, load_source_manifest_from_dir};
-use package::{
-    compute_dir_checksum, inspect_ywp_file, load_packaged_build_info, prepare_plugin_package,
-};
+use package::{inspect_ywp_file, load_packaged_build_info, prepare_plugin_package};
 use permissions::{
     build_permission_path_scopes, collect_missing_permissions, path_scope_variants,
     push_allow_flag, resolve_plugin_entrypoint,
@@ -402,7 +400,6 @@ pub fn list_plugins_internal(app: &AppHandle) -> Result<Vec<PluginSummary>, Stri
             registry_locale.as_deref(),
             registry_fallback_locale.as_deref(),
         );
-        let checksum = compute_dir_checksum(&path).ok();
         let build_info = if path.join("build.json").is_file() {
             load_packaged_build_info(&path).ok()
         } else {
@@ -413,6 +410,11 @@ pub fn list_plugins_internal(app: &AppHandle) -> Result<Vec<PluginSummary>, Stri
         } else {
             PluginPackageSourceKind::Workspace
         };
+        let checksum = registry
+            .installations
+            .get(&manifest.plugin_id)
+            .and_then(|entry| entry.source.as_ref())
+            .and_then(|source| source.checksum.clone());
         let installation = build_installation_from_registry(
             &registry,
             &manifest,
@@ -476,14 +478,13 @@ pub fn list_plugins_internal(app: &AppHandle) -> Result<Vec<PluginSummary>, Stri
             registry_locale.as_deref(),
             registry_fallback_locale.as_deref(),
         );
-        let checksum = compute_dir_checksum(&workspace_path).ok();
         let installation = build_installation_from_registry(
             &registry,
             &manifest,
             PluginPackageSource {
                 kind: PluginPackageSourceKind::Workspace,
                 value: workspace_path.to_string_lossy().to_string(),
-                checksum,
+                checksum: None,
                 package_format: None,
                 package_format_version: None,
                 builder_sdk_version: None,
@@ -714,7 +715,6 @@ pub fn attach_plugin_workspace_internal(
         ));
     }
 
-    let checksum = compute_dir_checksum(&workspace_path).ok();
     let mut registry = read_registry(app)?;
     let registry_locale = registry.app_locale.clone();
     let registry_fallback_locale = registry.app_fallback_locale.clone();
@@ -745,7 +745,7 @@ pub fn attach_plugin_workspace_internal(
             source: Some(PluginPackageSource {
                 kind: PluginPackageSourceKind::Workspace,
                 value: workspace_path.to_string_lossy().to_string(),
-                checksum: checksum.clone(),
+                checksum: None,
                 package_format: None,
                 package_format_version: None,
                 builder_sdk_version: None,
@@ -790,7 +790,7 @@ pub fn attach_plugin_workspace_internal(
         PluginPackageSource {
             kind: PluginPackageSourceKind::Workspace,
             value: workspace_path.to_string_lossy().to_string(),
-            checksum,
+            checksum: None,
             package_format: None,
             package_format_version: None,
             builder_sdk_version: None,

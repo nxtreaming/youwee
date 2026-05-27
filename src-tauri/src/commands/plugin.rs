@@ -20,8 +20,10 @@ use crate::types::{
 };
 
 #[tauri::command]
-pub fn list_plugins(app: AppHandle) -> Result<Vec<PluginSummary>, String> {
-    list_plugins_internal(&app)
+pub async fn list_plugins(app: AppHandle) -> Result<Vec<PluginSummary>, String> {
+    tokio::task::spawn_blocking(move || list_plugins_internal(&app))
+        .await
+        .map_err(|e| format!("Failed to join plugin list task: {}", e))?
 }
 
 #[tauri::command]

@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
@@ -45,45 +45,6 @@ fn derive_signer_fingerprint(public_key: &[u8]) -> String {
 
 fn derive_signer_key_id(public_key: &[u8]) -> String {
     format!("ed25519:sha256:{}", derive_signer_fingerprint(public_key))
-}
-
-pub(super) fn compute_dir_checksum(root: &Path) -> Result<String, String> {
-    use sha2::{Digest, Sha256};
-
-    let mut queue = VecDeque::from([root.to_path_buf()]);
-    let mut files = Vec::new();
-    while let Some(path) = queue.pop_front() {
-        for entry in std::fs::read_dir(&path)
-            .map_err(|e| format!("Failed to read directory {}: {}", path.display(), e))?
-        {
-            let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
-            let entry_path = entry.path();
-            if entry_path.is_dir() {
-                queue.push_back(entry_path);
-            } else if entry_path.is_file() {
-                files.push(entry_path);
-            }
-        }
-    }
-    files.sort();
-
-    let mut hasher = Sha256::new();
-    for file in files {
-        let relative = file
-            .strip_prefix(root)
-            .unwrap_or(&file)
-            .to_string_lossy()
-            .to_string();
-        hasher.update(relative.as_bytes());
-        let mut bytes = Vec::new();
-        std::fs::File::open(&file)
-            .map_err(|e| format!("Failed to open {}: {}", file.display(), e))?
-            .read_to_end(&mut bytes)
-            .map_err(|e| format!("Failed to read {}: {}", file.display(), e))?;
-        hasher.update(&bytes);
-    }
-
-    Ok(hex::encode(hasher.finalize()))
 }
 
 fn extract_zip_to_temp(bytes: &[u8], label: &str) -> Result<PathBuf, String> {
