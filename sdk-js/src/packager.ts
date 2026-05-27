@@ -858,10 +858,7 @@ export async function packPluginPackage(
   const packageBytes = createStoredZip(entries);
   const outDir = resolve(input.outDir || join(buildResult.rootDir, 'release'));
   mkdirSync(outDir, { recursive: true });
-  const packagePath = join(
-    outDir,
-    `${buildResult.runtimeManifest.slug}-${buildResult.runtimeManifest.version}.${PACKAGE_FORMAT}`,
-  );
+  const packagePath = join(outDir, `${buildResult.runtimeManifest.slug}.${PACKAGE_FORMAT}`);
   writeFileSync(packagePath, packageBytes);
 
   return {
