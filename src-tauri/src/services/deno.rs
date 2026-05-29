@@ -5,6 +5,40 @@ use std::process::Stdio;
 use tauri::{AppHandle, Manager};
 use tokio::process::Command;
 
+fn get_system_deno_candidates() -> Vec<PathBuf> {
+    #[cfg(windows)]
+    let binary_name = "deno.exe";
+    #[cfg(not(windows))]
+    let binary_name = "deno";
+
+    let mut candidates = Vec::new();
+
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            candidates.push(dir.join(binary_name));
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        let home = std::env::var("HOME").unwrap_or_default();
+        candidates.extend([
+            PathBuf::from(home).join(".deno/bin/deno"),
+            PathBuf::from("/opt/homebrew/bin").join(binary_name),
+            PathBuf::from("/usr/local/bin").join(binary_name),
+            PathBuf::from("/usr/bin").join(binary_name),
+        ]);
+    }
+
+    candidates
+}
+
+fn get_system_deno_path() -> Option<PathBuf> {
+    get_system_deno_candidates()
+        .into_iter()
+        .find(|path| path.exists())
+}
+
 /// Get the Deno binary path (app data or system)
 pub async fn get_deno_path(app: &AppHandle) -> Option<PathBuf> {
     // First check app data directory
@@ -20,48 +54,7 @@ pub async fn get_deno_path(app: &AppHandle) -> Option<PathBuf> {
         }
     }
 
-    // Fallback: check if system deno is available
-    #[cfg(unix)]
-    {
-        // Check common deno locations
-        let home = std::env::var("HOME").unwrap_or_default();
-        let deno_home = PathBuf::from(&home).join(".deno/bin/deno");
-        if deno_home.exists() {
-            return Some(deno_home);
-        }
-
-        let mut cmd = Command::new("which");
-        cmd.arg("deno");
-        cmd.hide_window();
-        let output = cmd.output().await.ok()?;
-
-        if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path_str.is_empty() {
-                return Some(PathBuf::from(path_str));
-            }
-        }
-    }
-
-    #[cfg(windows)]
-    {
-        let mut cmd = Command::new("where");
-        cmd.arg("deno");
-        cmd.hide_window();
-        let output = cmd.output().await.ok()?;
-
-        if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .next()?
-                .to_string();
-            if !path_str.is_empty() {
-                return Some(PathBuf::from(path_str));
-            }
-        }
-    }
-
-    None
+    get_system_deno_path()
 }
 
 /// Check Deno runtime status
@@ -108,15 +101,12 @@ pub async fn check_deno_internal(app: &AppHandle) -> Result<DenoStatus, String> 
         }
     }
 
-    // Check system Deno (including ~/.deno/bin/deno)
-    let home = std::env::var("HOME").unwrap_or_default();
-    let deno_home = PathBuf::from(&home).join(".deno/bin/deno");
-
-    let (deno_cmd, is_home_deno) = if deno_home.exists() {
-        (deno_home.to_string_lossy().to_string(), true)
-    } else {
-        ("deno".to_string(), false)
-    };
+    // Check system Deno (PATH first, then well-known locations)
+    let deno_path = get_system_deno_path();
+    let deno_cmd = deno_path
+        .as_ref()
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_else(|| "deno".to_string());
 
     let mut cmd = Command::new(&deno_cmd);
     cmd.args(["--version"])
@@ -140,42 +130,10 @@ pub async fn check_deno_internal(app: &AppHandle) -> Result<DenoStatus, String> 
                 })
                 .unwrap_or_default();
 
-            let path = if is_home_deno {
-                Some(deno_home.to_string_lossy().to_string())
-            } else {
-                #[cfg(unix)]
-                {
-                    let mut cmd = Command::new("which");
-                    cmd.arg("deno");
-                    cmd.hide_window();
-                    cmd.output()
-                        .await
-                        .ok()
-                        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                }
-                #[cfg(windows)]
-                {
-                    let mut cmd = Command::new("where");
-                    cmd.arg("deno");
-                    cmd.hide_window();
-                    cmd.output().await.ok().map(|o| {
-                        String::from_utf8_lossy(&o.stdout)
-                            .lines()
-                            .next()
-                            .unwrap_or("")
-                            .to_string()
-                    })
-                }
-                #[cfg(not(any(unix, windows)))]
-                {
-                    None
-                }
-            };
-
             Ok(DenoStatus {
                 installed: true,
                 version: Some(version),
-                binary_path: path,
+                binary_path: deno_path.map(|path| path.to_string_lossy().to_string()),
                 is_system: true,
             })
         }
