@@ -23,7 +23,7 @@ static TELEGRAM_STATUS: Mutex<TelegramStatus> = Mutex::new(TelegramStatus {
 static TELEGRAM_GENERATION: AtomicU64 = AtomicU64::new(0);
 static TELEGRAM_LAST_UPDATE_ID: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TelegramConfig {
     pub enabled: bool,
@@ -33,7 +33,7 @@ pub struct TelegramConfig {
     pub plain_url_action: TelegramPlainUrlAction,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TelegramPlainUrlAction {
     Add,
@@ -139,11 +139,23 @@ struct BotCommand {
 
 pub fn set_config(app: AppHandle, config: TelegramConfig) {
     let sanitized = sanitize_config(config);
-    if let Ok(mut guard) = TELEGRAM_CONFIG.lock() {
-        if guard.bot_token != sanitized.bot_token {
-            TELEGRAM_LAST_UPDATE_ID.store(0, Ordering::SeqCst);
+    match TELEGRAM_CONFIG.lock() {
+        Ok(mut guard) => {
+            if *guard == sanitized {
+                return;
+            }
+            if guard.bot_token != sanitized.bot_token {
+                TELEGRAM_LAST_UPDATE_ID.store(0, Ordering::SeqCst);
+            }
+            *guard = sanitized.clone();
         }
-        *guard = sanitized.clone();
+        Err(_) => {
+            set_status(
+                TelegramStatusState::Error,
+                Some("Failed to update Telegram config.".to_string()),
+            );
+            return;
+        }
     }
 
     let generation = TELEGRAM_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
