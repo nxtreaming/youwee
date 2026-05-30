@@ -2,9 +2,9 @@
 
 <div align="center">
 
-  ![English](https://img.shields.io/badge/lang-English-blue)
-  ![Tiếng Việt](https://img.shields.io/badge/lang-Tiếng_Việt-red)
-  ![简体中文](https://img.shields.io/badge/lang-简体中文-green)
+  [![English](https://img.shields.io/badge/lang-English-blue)](../README.md)
+  [![Tiếng Việt](https://img.shields.io/badge/lang-Tiếng_Việt-red)](README.vi.md)
+  [![简体中文](https://img.shields.io/badge/lang-简体中文-green)](README.zh-CN.md)
   ![Français](https://img.shields.io/badge/lang-Français-0055A4)
   ![Русский](https://img.shields.io/badge/lang-Русский-1F5FBF)
   ![العربية](https://img.shields.io/badge/lang-%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9-0A8F6A)
