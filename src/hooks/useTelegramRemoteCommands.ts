@@ -9,7 +9,7 @@ import type { DownloadItem, ExternalEnqueueOptions, Quality } from '@/lib/types'
 import { isSafeUrl } from '@/lib/utils';
 
 interface TelegramDownloadCommandEvent {
-  command: 'add' | 'download' | 'status' | 'queue' | 'start' | 'stop';
+  command: 'add' | 'download' | 'status' | 'queue' | 'run' | 'stop';
   url?: string | null;
   quality?: string | null;
   chatId: string;
@@ -174,7 +174,7 @@ export function useTelegramRemoteCommands(
         return;
       }
 
-      if (payload.command === 'start') {
+      if (payload.command === 'run') {
         const isBusy =
           download.isDownloading ||
           universal.isDownloading ||

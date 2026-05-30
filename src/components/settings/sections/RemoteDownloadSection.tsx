@@ -40,11 +40,12 @@ const CONFIG_HIGHLIGHT_IDS = new Set([
 ]);
 
 const TELEGRAM_COMMANDS = [
+  { key: 'start', commandName: '/start' },
   { key: 'add', commandName: '/add' },
   { key: 'download', commandName: '/download' },
   { key: 'status', commandName: '/status' },
   { key: 'queue', commandName: '/queue' },
-  { key: 'start', commandName: '/start' },
+  { key: 'run', commandName: '/run' },
   { key: 'stop', commandName: '/stop' },
   { key: 'help', commandName: '/help' },
 ] as const;
