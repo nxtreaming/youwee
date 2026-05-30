@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { usePersistedDownloadQueue } from '@/hooks/usePersistedDownloadQueue';
 import { extractBackendError, localizeBackendError } from '@/lib/backend-error';
 import {
   AUTO_RETRY_LIMITS,
@@ -23,6 +24,7 @@ import {
 import { buildCookieProxyInvokeOptions, loadNetworkSettings } from '@/lib/network-config';
 import { parseUniversalUrls } from '@/lib/sources';
 import type { DownloadItem } from '@/lib/types';
+import { useDownload } from './DownloadContext';
 
 const STORAGE_KEY = 'youwee-gallerydl-settings';
 
@@ -129,6 +131,15 @@ export function GalleryDlProvider({ children }: { children: ReactNode }) {
   const itemsRef = useRef<DownloadItem[]>([]);
   const settingsRef = useRef<GalleryDlSettings>(settings);
   const focusClearTimerRef = useRef<number | null>(null);
+  const { settings: downloadSettings } = useDownload();
+
+  usePersistedDownloadQueue({
+    queueKind: 'gallery',
+    enabled: downloadSettings.persistDownloadQueue,
+    items,
+    setItems,
+    logLabel: 'gallery queue',
+  });
 
   useEffect(() => {
     itemsRef.current = items;

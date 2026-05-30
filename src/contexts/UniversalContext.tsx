@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { usePersistedDownloadQueue } from '@/hooks/usePersistedDownloadQueue';
 import {
   extractBackendError,
   localizeBackendError,
@@ -49,6 +50,7 @@ import type {
   Quality,
   VideoInfoResponse,
 } from '@/lib/types';
+import { useDownload } from './DownloadContext';
 
 const STORAGE_KEY = 'youwee-universal-settings';
 const DOWNLOAD_STORAGE_KEY = 'youwee-settings';
@@ -274,6 +276,15 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
   const itemsRef = useRef<DownloadItem[]>([]);
   const settingsRef = useRef<UniversalSettings>(settings);
   const focusClearTimerRef = useRef<number | null>(null);
+  const { settings: downloadSettings } = useDownload();
+
+  usePersistedDownloadQueue({
+    queueKind: 'universal',
+    enabled: downloadSettings.persistDownloadQueue,
+    items,
+    setItems,
+    logLabel: 'universal queue',
+  });
 
   // Keep itemsRef in sync with items state
   useEffect(() => {
