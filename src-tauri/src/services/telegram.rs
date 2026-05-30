@@ -55,7 +55,7 @@ pub struct TelegramStatus {
     pub message: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TelegramStatusState {
     Disabled,
@@ -152,10 +152,12 @@ pub fn set_config(app: AppHandle, config: TelegramConfig) {
             *guard = sanitized.clone();
         }
         Err(_) => {
-            set_status(
+            if set_status(
                 TelegramStatusState::Error,
                 Some("Failed to update Telegram config.".to_string()),
-            );
+            ) {
+                crate::rebuild_tray_menu(&app);
+            }
             return;
         }
     }
@@ -164,31 +166,42 @@ pub fn set_config(app: AppHandle, config: TelegramConfig) {
     abort_polling_task();
 
     if !sanitized.enabled {
-        set_status(TelegramStatusState::Disabled, None);
+        if set_status(TelegramStatusState::Disabled, None) {
+            crate::rebuild_tray_menu(&app);
+        }
         return;
     }
 
     if sanitized.bot_token.is_empty() {
-        set_status(
+        if set_status(
             TelegramStatusState::Error,
             Some("Telegram bot token is required.".to_string()),
-        );
+        ) {
+            crate::rebuild_tray_menu(&app);
+        }
         return;
     }
 
     if sanitized.allowed_chat_ids.is_empty() {
-        set_status(
+        if set_status(
             TelegramStatusState::Error,
             Some("At least one allowed chat ID is required.".to_string()),
-        );
+        ) {
+            crate::rebuild_tray_menu(&app);
+        }
         return;
     }
 
-    set_status(TelegramStatusState::Running, None);
+    if set_status(TelegramStatusState::Running, None) {
+        crate::rebuild_tray_menu(&app);
+    }
     let bot_token = sanitized.bot_token.clone();
+    let command_app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(error) = set_my_commands(&Client::new(), &bot_token).await {
-            set_status(TelegramStatusState::Error, Some(error));
+            if set_status(TelegramStatusState::Error, Some(error)) {
+                crate::rebuild_tray_menu(&command_app);
+            }
         }
     });
     replace_polling_task(tauri::async_runtime::spawn(run_polling_loop(
@@ -271,7 +284,9 @@ async fn run_polling_loop(app: AppHandle, config: TelegramConfig, generation: u6
         match fetch_updates(&client, &config.bot_token, offset).await {
             Ok(updates) => {
                 backoff_secs = 2;
-                set_status(TelegramStatusState::Running, None);
+                if set_status(TelegramStatusState::Running, None) {
+                    crate::rebuild_tray_menu(&app);
+                }
 
                 for update in updates {
                     TELEGRAM_LAST_UPDATE_ID.fetch_max(update.update_id, Ordering::SeqCst);
@@ -290,7 +305,9 @@ async fn run_polling_loop(app: AppHandle, config: TelegramConfig, generation: u6
                 }
             }
             Err(error) => {
-                set_status(TelegramStatusState::Error, Some(error));
+                if set_status(TelegramStatusState::Error, Some(error)) {
+                    crate::rebuild_tray_menu(&app);
+                }
                 tokio::time::sleep(tokio::time::Duration::from_secs(backoff_secs)).await;
                 backoff_secs = (backoff_secs * 2).min(MAX_BACKOFF_SECS);
             }
@@ -494,10 +511,15 @@ async fn set_my_commands(client: &Client, bot_token: &str) -> Result<(), String>
     }
 }
 
-fn set_status(state: TelegramStatusState, message: Option<String>) {
+fn set_status(state: TelegramStatusState, message: Option<String>) -> bool {
     if let Ok(mut status) = TELEGRAM_STATUS.lock() {
+        if status.state == state && status.message == message {
+            return false;
+        }
         *status = TelegramStatus { state, message };
+        return true;
     }
+    false
 }
 
 fn help_text() -> &'static str {
