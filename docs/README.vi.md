@@ -18,6 +18,8 @@
   [![Downloads](https://img.shields.io/github/downloads/vanloctech/youwee/total?label=Downloads)](https://github.com/vanloctech/youwee/releases)
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
   [![Reddit](https://img.shields.io/badge/Reddit-r%2Fyouwee-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/r/youwee)
+  [![Website](https://img.shields.io/badge/Website-youwee.app-0EA5E9)](https://youwee.app)
+  [![Discord](https://img.shields.io/badge/Discord-Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/yCrs9hcw)
   [![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri&logoColor=white)](https://tauri.app/)
   [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 </div>
@@ -113,6 +115,7 @@
 
 Mở rộng Youwee bằng plugin `.ywp` đã ký cho workflow sau khi tải xong, như gửi thông báo, upload file hoặc tích hợp dịch vụ bên thứ ba.
 
+- Trang plugin: [Youwee Plugins](http://localhost:5175/plugins)
 - Plugin khuyến nghị và hướng dẫn cài đặt: [PLUGINS.vi.md](PLUGINS.vi.md)
 - SDK: [sdk-js/README.md](../sdk-js/README.md) · [youwee-sdk](https://www.npmjs.com/package/youwee-sdk)
 
@@ -151,6 +154,9 @@ Dự án này được cấp phép theo MIT License - xem file [LICENSE](../LICE
 
 ## Liên hệ
 
+- **Website**: [youwee.app](https://youwee.app)
+- **Tài liệu**: [Docs](http://localhost:5175/docs)
+- **Discord**: [Youwee Community](https://discord.gg/yCrs9hcw)
 - **GitHub**: [@vanloctech](https://github.com/vanloctech)
 - **Issues**: [GitHub Issues](https://github.com/vanloctech/youwee/issues)
 

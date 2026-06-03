@@ -18,6 +18,8 @@
   [![Downloads](https://img.shields.io/github/downloads/vanloctech/youwee/total?label=Downloads)](https://github.com/vanloctech/youwee/releases)
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
   [![Reddit](https://img.shields.io/badge/Reddit-r%2Fyouwee-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/r/youwee)
+  [![Website](https://img.shields.io/badge/Website-youwee.app-0EA5E9)](https://youwee.app)
+  [![Discord](https://img.shields.io/badge/Discord-Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/yCrs9hcw)
   [![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri&logoColor=white)](https://tauri.app/)
   [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 
@@ -155,6 +157,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
+- **Website**: [youwee.app](https://youwee.app)
+- **Discord**: [Youwee Community](https://discord.gg/yCrs9hcw)
 - **GitHub**: [@vanloctech](https://github.com/vanloctech)
 - **Issues**: [GitHub Issues](https://github.com/vanloctech/youwee/issues)
 
