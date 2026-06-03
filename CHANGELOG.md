@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **AI summary search** - Added SQLite FTS5-powered Library search across titles, URLs, file paths, and saved AI summaries, with search scope controls for all content, details only, or AI summaries only
 
 ### Changed
 
