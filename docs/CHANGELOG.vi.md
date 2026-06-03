@@ -8,6 +8,14 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Thêm mới
+
+### Thay đổi
+
+### Sửa lỗi
+
+## [0.16.0] - 2026-06-02
+
+### Thêm mới
 - **Lưu hàng đợi tải xuống** - Thêm tùy chọn trong cài đặt Tải xuống để lưu các item trong queue YouTube, Universal và Gallery vào database của ứng dụng, giúp khôi phục lại hàng đợi sau khi đóng và mở lại Youwee
 - **Xuất dữ liệu** - Thêm không gian Xuất dữ liệu mới để xuất danh sách từ playlist và kênh YouTube, chọn chính xác các cột cần lấy, lưu file ở nhiều định dạng như CSV, Excel, JSON, Markdown, HTML, SQLite và Word, đồng thời lưu file đã xuất vào Thư viện để mở lại sau
 - **Tải từ xa qua Telegram** - Thêm mục cài đặt Remote Download với điều khiển Telegram bằng long polling, nhập chat ID được phép dạng tag, popup hướng dẫn lệnh, hỗ trợ `/add`, `/download`, `/status`, `/queue`, `/stop`, `/help`, cùng cú pháp chất lượng ngắn như `720`, `audio`, và `mp3`
@@ -18,7 +26,7 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Sửa lỗi
 - **Xung đột cài đặt deb trên Linux** - Đổi tên yt-dlp bundled sang tên binary riêng của Youwee để gói `.deb` không còn đụng với package `yt-dlp` do distro quản lý
-- **Resolve đường dẫn dependency hệ thống** - Ưu tiên binary từ `PATH` của người dùng trước khi fallback sang các vị trí phổ biến cho yt-dlp, FFmpeg, Deno, gallery-dl và các công cụ phụ trợ liên quan
+- **Đường dẫn dependency hệ thống** - Cải thiện resolve PATH trên Windows cho yt-dlp, FFmpeg, Deno, gallery-dl và các công cụ phụ trợ
 - **Chọn profile cookie Firefox** - Ưu tiên profile Firefox đang active từ `profiles.ini` để tải bằng cookie trình duyệt dùng đúng profile có khả năng đang lưu cookie
 
 ## [0.15.1] - 2026-05-27

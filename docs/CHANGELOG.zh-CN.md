@@ -8,6 +8,14 @@ Youwee 的所有重要更改都将记录在此文件中。
 ## [Unreleased]
 
 ### 新增
+
+### 变更
+
+### 修复
+
+## [0.16.0] - 2026-06-02
+
+### 新增
 - **持久化下载队列** - 新增下载设置选项，可将 YouTube、Universal 和 Gallery 队列项目保存到应用数据库中，以便关闭并重新打开 Youwee 后恢复队列
 - **数据导出** - 新增数据导出工作区，可从 YouTube 播放列表和频道导出列表，自由选择要包含的字段，保存为 CSV、Excel、JSON、Markdown、HTML、SQLite、Word 等格式，并将导出的文件保存到媒体库，方便之后再次打开
 - **Telegram 远程下载** - 新增 Remote Download 设置区域，支持通过 Telegram long polling 进行控制、以 tag 形式输入允许的 chat ID、命令指南弹窗、`/add`、`/download`、`/status`、`/queue`、`/stop`、`/help` 命令，以及 `720`、`audio`、`mp3` 等简短质量参数
@@ -18,7 +26,7 @@ Youwee 的所有重要更改都将记录在此文件中。
 
 ### 修复
 - **Linux deb 安装冲突** - 将内置 yt-dlp sidecar 重命名为 Youwee 专用二进制名称，使 `.deb` 安装不再与发行版管理的 `yt-dlp` 包冲突
-- **系统依赖路径解析** - 优先使用用户 `PATH` 中的二进制文件，再回退到 yt-dlp、FFmpeg、Deno、gallery-dl 及相关辅助工具的常见安装位置
+- **系统依赖路径** - 改进 Windows 上 yt-dlp、FFmpeg、Deno、gallery-dl 及辅助工具的 PATH 解析
 - **Firefox Cookie 配置文件选择** - 优先使用 `profiles.ini` 中的活动 Firefox 配置文件，让浏览器 Cookie 下载更可能选中实际保存 Cookie 的配置文件
 
 ## [0.15.1] - 2026-05-27
