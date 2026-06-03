@@ -18,6 +18,8 @@
   [![Downloads](https://img.shields.io/github/downloads/vanloctech/youwee/total?label=Downloads)](https://github.com/vanloctech/youwee/releases)
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
   [![Reddit](https://img.shields.io/badge/Reddit-r%2Fyouwee-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/r/youwee)
+  [![Website](https://img.shields.io/badge/Website-youwee.app-0EA5E9)](https://youwee.app)
+  [![Discord](https://img.shields.io/badge/Discord-Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/yCrs9hcw)
   [![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri&logoColor=white)](https://tauri.app/)
   [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 </div>
@@ -113,6 +115,7 @@
 
 使用已签名的 `.ywp` 插件扩展 Youwee 的下载后工作流，例如通知、上传和第三方集成。
 
+- 插件页面：[Youwee Plugins](http://localhost:5175/plugins)
 - 推荐插件和安装指南：[PLUGINS.zh-CN.md](PLUGINS.zh-CN.md)
 - SDK：[sdk-js/README.md](../sdk-js/README.md) · [youwee-sdk](https://www.npmjs.com/package/youwee-sdk)
 
@@ -151,6 +154,9 @@ bun run tauri build
 
 ## 联系方式
 
+- **Website**: [youwee.app](https://youwee.app)
+- **文档**: [Docs](http://localhost:5175/docs)
+- **Discord**: [Youwee Community](https://discord.gg/yCrs9hcw)
 - **GitHub**: [@vanloctech](https://github.com/vanloctech)
 - **Issues**: [GitHub Issues](https://github.com/vanloctech/youwee/issues)
 
