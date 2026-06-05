@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   CheckSquare,
+  ListPlus,
   Loader2,
   Plus,
   Search,
@@ -16,6 +17,13 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { extractBackendError, localizeBackendError } from '@/lib/backend-error';
 import type {
   YoutubeSearchQueueResult,
@@ -80,6 +88,105 @@ function loadStoredState(): StoredYoutubeKeywordSearchState {
   }
 }
 
+function SearchResultGridItem({
+  video,
+  selected,
+  isAdded,
+  onToggle,
+  disabled,
+}: {
+  video: YoutubeSearchVideo;
+  selected: boolean;
+  isAdded: boolean;
+  onToggle: () => void;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation('download');
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled || isAdded}
+      className={cn(
+        'group relative flex flex-col text-left transition-all duration-300 rounded-xl overflow-hidden border bg-card/40 hover:bg-card hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/50',
+        isAdded
+          ? 'opacity-70 cursor-not-allowed border-emerald-500/30'
+          : selected
+            ? 'border-primary shadow-sm bg-primary/5'
+            : 'border-border/50',
+      )}
+    >
+      {/* Thumbnail Area */}
+      <div className="relative w-full aspect-video bg-muted overflow-hidden">
+        {video.thumbnail ? (
+          <img
+            src={video.thumbnail}
+            alt=""
+            className={cn(
+              'w-full h-full object-cover transition-transform duration-500',
+              !isAdded && 'group-hover:scale-105',
+            )}
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+            <Video className="w-8 h-8" />
+          </div>
+        )}
+
+        {/* Hover/Selected Overlay */}
+        {!isAdded && (
+          <div
+            className={cn(
+              'absolute inset-0 bg-black/40 transition-opacity flex items-start justify-end p-2',
+              selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+            )}
+          >
+            {selected ? (
+              <CheckSquare className="w-5 h-5 text-primary bg-background/90 rounded-[3px]" />
+            ) : (
+              <Square className="w-5 h-5 text-white/80" />
+            )}
+          </div>
+        )}
+
+        {/* Added Overlay */}
+        {isAdded && (
+          <div className="absolute inset-0 bg-emerald-500/20 flex flex-col items-center justify-center backdrop-blur-[1px]">
+            <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-1" />
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full backdrop-blur-md">
+              {t('urlInput.keyword.added')}
+            </span>
+          </div>
+        )}
+
+        {/* Duration */}
+        {video.duration && !isAdded && (
+          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-[10px] font-medium text-white shadow-sm backdrop-blur-md">
+            {video.duration}
+          </span>
+        )}
+      </div>
+
+      {/* Info Area */}
+      <div className="p-3 flex-1 flex flex-col">
+        <p className="text-sm font-semibold leading-tight line-clamp-2" title={video.title}>
+          {video.title}
+        </p>
+        <div className="mt-2 flex flex-col gap-0.5 text-[11px] text-muted-foreground">
+          {video.channel && (
+            <span className="font-medium text-foreground/80 truncate">{video.channel}</span>
+          )}
+          <div className="flex items-center gap-2 truncate opacity-80">
+            {video.view_count_text && <span>{video.view_count_text}</span>}
+            {video.published_time_text && <span>{video.published_time_text}</span>}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export function YoutubeKeywordSearch({
   disabled,
   onBack,
@@ -116,7 +223,7 @@ export function YoutubeKeywordSearch({
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-      // Ignore storage failures; search state can be rebuilt by running the query again.
+      // Ignore storage failures
     }
   }, [continuation, limit, query, selectedIds, videos]);
 
@@ -212,229 +319,195 @@ export function YoutubeKeywordSearch({
   const busy = disabled || isSearching || isLoadingMore || isAdding;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/50 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-            title={t('urlInput.keyword.back')}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold leading-6">{t('urlInput.keyword.pageTitle')}</h2>
-            <p className="truncate text-sm text-muted-foreground">
-              {t('urlInput.keyword.pageDescription')}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <form
-        onSubmit={handleSubmit}
-        className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-2.5 sm:flex-row"
-      >
-        <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            disabled={disabled || isSearching}
-            placeholder={t('urlInput.keyword.placeholder')}
-            className="h-11 bg-background/50 pl-10"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Input
-            type="number"
-            min={MIN_LIMIT}
-            max={MAX_LIMIT}
-            value={limit}
-            onChange={(event) => setLimit(clampLimit(Number(event.target.value)))}
-            disabled={disabled || isSearching}
-            className="h-11 w-24 bg-background/50"
-            aria-label={t('urlInput.keyword.limitLabel')}
-          />
-          <Button
-            type="submit"
-            disabled={disabled || isSearching || !query.trim()}
-            className="h-11 gap-2"
-          >
-            {isSearching ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
-            {t('urlInput.keyword.search')}
-          </Button>
-        </div>
-      </form>
-
-      <div className="min-h-[220px] flex-1 overflow-hidden rounded-lg border border-border/60 bg-background/45">
-        {error ? (
-          <div className="flex h-full min-h-[220px] items-center justify-center p-4">
-            <div className="max-w-sm text-center">
-              <AlertCircle className="mx-auto mb-2 h-7 w-7 text-destructive" />
-              <p className="text-sm font-medium">{t('urlInput.keyword.errorTitle')}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-            </div>
-          </div>
-        ) : isSearching ? (
-          <div className="flex h-full min-h-[220px] items-center justify-center p-4 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {t('urlInput.keyword.searching')}
-          </div>
-        ) : !hasResults ? (
-          <div className="flex h-full min-h-[220px] items-center justify-center p-4">
-            <div className="max-w-sm text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Video className="h-6 w-6" />
-              </div>
-              <p className="text-sm font-medium">{t('urlInput.keyword.emptyTitle')}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t('urlInput.keyword.emptyDescription')}
+    <div className="flex flex-col h-full bg-background rounded-xl border border-border/50 overflow-hidden shadow-sm">
+      {/* Header & Search Form */}
+      <div className="flex-shrink-0 border-b border-border/50 bg-card/20">
+        <div className="p-4 sm:p-6 sm:pb-5 space-y-5">
+          {/* Header */}
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={onBack}
+              className="p-2 -ml-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title={t('urlInput.keyword.back')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h2 className="text-lg font-semibold leading-none text-foreground tracking-tight">
+                {t('urlInput.keyword.pageTitle')}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                {t('urlInput.keyword.pageDescription')}
               </p>
             </div>
           </div>
+
+          {/* Search Form */}
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center"
+          >
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                disabled={disabled || isSearching}
+                placeholder={t('urlInput.keyword.placeholder')}
+                className="pl-10 h-12 rounded-xl bg-background border-border/60 focus:bg-background text-base sm:text-sm shadow-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Select
+                value={String(limit)}
+                onValueChange={(val) => setLimit(Number(val))}
+                disabled={disabled || isSearching}
+              >
+                <SelectTrigger
+                  className="w-[85px] h-12 rounded-xl bg-background border-border/60 shadow-sm"
+                  aria-label={t('urlInput.keyword.limitLabel')}
+                >
+                  <SelectValue placeholder="Limit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                type="submit"
+                disabled={disabled || isSearching || !query.trim()}
+                className="h-12 px-6 rounded-xl font-medium shadow-sm transition-all"
+              >
+                {isSearching ? (
+                  <Loader2 className="w-4 h-4 sm:mr-2 animate-spin" />
+                ) : (
+                  <Search className="w-4 h-4 sm:mr-2" />
+                )}
+                <span className="hidden sm:inline">{t('urlInput.keyword.search')}</span>
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 min-h-[300px] relative bg-muted/20">
+        {error ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+              <AlertCircle className="w-7 h-7 text-destructive" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground mb-1">
+              {t('urlInput.keyword.errorTitle')}
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-sm">{error}</p>
+          </div>
+        ) : isSearching ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-muted-foreground">
+            <Loader2 className="w-10 h-10 animate-spin mb-4 text-primary/40" />
+            <p className="text-sm font-medium animate-pulse">{t('urlInput.keyword.searching')}</p>
+          </div>
+        ) : !hasResults ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-20 h-20 rounded-3xl bg-background flex items-center justify-center mb-5 border border-border/50 shadow-sm">
+              <Video className="w-10 h-10 text-muted-foreground/40" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-1.5">
+              {t('urlInput.keyword.emptyTitle')}
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              {t('urlInput.keyword.emptyDescription')}
+            </p>
+          </div>
         ) : (
           <ScrollArea className="h-full">
-            <div className="divide-y divide-border/50">
-              {videos.map((video) => {
-                const selected = selectedIds.has(video.id);
-                const isAdded = queuedVideoIds.has(video.id);
-                return (
-                  <button
-                    type="button"
-                    key={video.id}
-                    onClick={() => toggleSelected(video.id)}
-                    disabled={busy || isAdded}
-                    className={cn(
-                      'grid w-full grid-cols-[auto_96px_minmax(0,1fr)] gap-3 px-3 py-2.5 text-left transition-colors',
-                      isAdded
-                        ? 'bg-emerald-500/5'
-                        : selected
-                          ? 'bg-primary/5'
-                          : 'hover:bg-muted/40',
-                    )}
-                  >
-                    <span className="mt-7 text-muted-foreground">
-                      {isAdded ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                      ) : selected ? (
-                        <CheckSquare className="h-4 w-4 text-primary" />
-                      ) : (
-                        <Square className="h-4 w-4" />
-                      )}
-                    </span>
-                    <span className="relative aspect-video overflow-hidden rounded-md bg-muted">
-                      {video.thumbnail ? (
-                        <img
-                          src={video.thumbnail}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center text-muted-foreground">
-                          <Video className="h-5 w-5" />
-                        </span>
-                      )}
-                      {video.duration ? (
-                        <span className="absolute bottom-1 right-1 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                          {video.duration}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="min-w-0 self-center">
-                      <span className="line-clamp-2 text-sm font-medium leading-5">
-                        {video.title}
-                      </span>
-                      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                        {video.channel ? <span className="truncate">{video.channel}</span> : null}
-                        {video.view_count_text ? <span>{video.view_count_text}</span> : null}
-                        {video.published_time_text ? (
-                          <span>{video.published_time_text}</span>
-                        ) : null}
-                        {isAdded ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 font-medium text-emerald-600 dark:text-emerald-400">
-                            <CheckCircle2 className="h-3 w-3" />
-                            {t('urlInput.keyword.added')}
-                          </span>
-                        ) : null}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 pb-6">
+              {videos.map((video) => (
+                <SearchResultGridItem
+                  key={video.id}
+                  video={video}
+                  selected={selectedIds.has(video.id)}
+                  isAdded={queuedVideoIds.has(video.id)}
+                  onToggle={() => toggleSelected(video.id)}
+                  disabled={busy}
+                />
+              ))}
             </div>
           </ScrollArea>
         )}
       </div>
 
-      {hasResults ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/25 px-2.5 py-2">
-          <div className="text-xs text-muted-foreground">
-            {t('urlInput.keyword.selectedCount', {
-              selected: selectedVideos.length,
-              total: videos.length,
-            })}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={selectAll}
-              disabled={busy || videos.every((video) => queuedVideoIds.has(video.id))}
-              className="h-8 gap-1.5 text-xs"
-            >
-              <CheckSquare className="h-3.5 w-3.5" />
-              {t('urlInput.keyword.selectAll')}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={clearSelection}
-              disabled={busy || selectedVideos.length === 0}
-              className="h-8 gap-1.5 text-xs"
-            >
-              <X className="h-3.5 w-3.5" />
-              {t('urlInput.keyword.clearSelection')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void runSearch(continuation)}
-              disabled={busy || !continuation}
-              className="h-8 gap-1.5 text-xs"
-            >
-              {isLoadingMore ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Search className="h-3.5 w-3.5" />
-              )}
-              {t('urlInput.keyword.loadMore')}
-            </Button>
-            <button
-              type="button"
-              onClick={() => void addSelected()}
-              disabled={busy || selectedVideos.length === 0}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium btn-gradient disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isAdding ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Plus className="h-3.5 w-3.5" />
-              )}
-              {t('urlInput.keyword.addSelected')}
-            </button>
+      {/* Action Bar (Floating-like style) */}
+      {hasResults && (
+        <div className="flex-shrink-0 border-t border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-sm font-medium text-muted-foreground px-1">
+              {t('urlInput.keyword.selectedCount', {
+                selected: selectedVideos.length,
+                total: videos.length,
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={selectAll}
+                disabled={busy || videos.every((v) => queuedVideoIds.has(v.id))}
+                className="h-10 px-3 text-sm font-medium rounded-lg"
+              >
+                <CheckSquare className="w-4 h-4 mr-1.5" />
+                {t('urlInput.keyword.selectAll')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearSelection}
+                disabled={busy || selectedVideos.length === 0}
+                className="h-10 px-3 text-sm font-medium rounded-lg"
+              >
+                <X className="w-4 h-4 mr-1.5" />
+                {t('urlInput.keyword.clearSelection')}
+              </Button>
+              <div className="w-px h-6 bg-border/60 mx-1 hidden sm:block" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void runSearch(continuation)}
+                disabled={busy || !continuation}
+                className="h-10 px-4 text-sm font-medium rounded-lg shadow-sm"
+              >
+                {isLoadingMore ? (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                ) : (
+                  <ListPlus className="w-4 h-4 mr-1.5" />
+                )}
+                {t('urlInput.keyword.loadMore')}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void addSelected()}
+                disabled={busy || selectedVideos.length === 0}
+                className="h-10 px-5 text-sm font-medium rounded-lg shadow-sm"
+              >
+                {isAdding ? (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4 mr-1.5" />
+                )}
+                {t('urlInput.keyword.addSelected')}
+              </Button>
+            </div>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
