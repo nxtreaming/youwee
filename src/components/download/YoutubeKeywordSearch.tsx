@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle2,
   CheckSquare,
+  Filter,
   ListPlus,
   Loader2,
   Plus,
@@ -12,10 +13,11 @@ import {
   Video,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
@@ -26,8 +28,13 @@ import {
 } from '@/components/ui/select';
 import { extractBackendError, localizeBackendError } from '@/lib/backend-error';
 import type {
+  YoutubeSearchDurationFilter,
+  YoutubeSearchFeatureFilter,
+  YoutubeSearchFilters,
   YoutubeSearchQueueResult,
   YoutubeSearchResponse,
+  YoutubeSearchSortFilter,
+  YoutubeSearchUploadDateFilter,
   YoutubeSearchVideo,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -36,6 +43,12 @@ const DEFAULT_LIMIT = 20;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 100;
 const STORAGE_KEY = 'youwee-youtube-keyword-search-state';
+const DEFAULT_FILTERS: YoutubeSearchFilters = {
+  uploadDate: null,
+  duration: null,
+  sort: 'relevance',
+  features: [],
+};
 
 interface YoutubeKeywordSearchProps {
   disabled?: boolean;
@@ -66,9 +79,65 @@ function mergeVideos(
 interface StoredYoutubeKeywordSearchState {
   query?: string;
   limit?: number;
+  filters?: Partial<YoutubeSearchFilters>;
   videos?: YoutubeSearchVideo[];
   selectedIds?: string[];
   continuation?: string | null;
+}
+
+interface SelectOption<T extends string> {
+  value: T;
+  labelKey: string;
+}
+
+const UPLOAD_DATE_OPTIONS: SelectOption<YoutubeSearchUploadDateFilter>[] = [
+  { value: 'today', labelKey: 'today' },
+  { value: 'thisWeek', labelKey: 'thisWeek' },
+  { value: 'thisMonth', labelKey: 'thisMonth' },
+  { value: 'thisYear', labelKey: 'thisYear' },
+];
+
+const DURATION_OPTIONS: SelectOption<YoutubeSearchDurationFilter>[] = [
+  { value: 'short', labelKey: 'short' },
+  { value: 'medium', labelKey: 'medium' },
+  { value: 'long', labelKey: 'long' },
+];
+
+const SORT_OPTIONS: SelectOption<YoutubeSearchSortFilter>[] = [
+  { value: 'relevance', labelKey: 'relevance' },
+  { value: 'uploadDate', labelKey: 'uploadDate' },
+  { value: 'viewCount', labelKey: 'viewCount' },
+  { value: 'rating', labelKey: 'rating' },
+];
+
+const FEATURE_OPTIONS: SelectOption<YoutubeSearchFeatureFilter>[] = [
+  { value: 'live', labelKey: 'live' },
+  { value: 'fourK', labelKey: 'fourK' },
+  { value: 'hd', labelKey: 'hd' },
+  { value: 'subtitles', labelKey: 'subtitles' },
+  { value: 'creativeCommons', labelKey: 'creativeCommons' },
+  { value: 'threeSixty', labelKey: 'threeSixty' },
+  { value: 'vr180', labelKey: 'vr180' },
+  { value: 'threeD', labelKey: 'threeD' },
+  { value: 'hdr', labelKey: 'hdr' },
+];
+
+function normalizeFilters(filters?: Partial<YoutubeSearchFilters>): YoutubeSearchFilters {
+  return {
+    uploadDate: filters?.uploadDate || null,
+    duration: filters?.duration || null,
+    sort: filters?.sort || DEFAULT_FILTERS.sort,
+    features: Array.isArray(filters?.features) ? filters.features : [],
+  };
+}
+
+function countActiveFilters(filters: YoutubeSearchFilters): number {
+  return (
+    (filters.uploadDate ? 1 : 0) +
+    (filters.duration ? 1 : 0) +
+    (filters.sort && filters.sort !== 'relevance' ? 1 : 0) +
+    filters.features.length
+  );
 }
 
 function loadStoredState(): StoredYoutubeKeywordSearchState {
@@ -79,6 +148,7 @@ function loadStoredState(): StoredYoutubeKeywordSearchState {
     return {
       query: typeof parsed.query === 'string' ? parsed.query : '',
       limit: clampLimit(Number(parsed.limit)),
+      filters: normalizeFilters(parsed.filters),
       videos: Array.isArray(parsed.videos) ? parsed.videos : [],
       selectedIds: Array.isArray(parsed.selectedIds) ? parsed.selectedIds : [],
       continuation: typeof parsed.continuation === 'string' ? parsed.continuation : null,
@@ -215,6 +285,9 @@ export function YoutubeKeywordSearch({
   const [storedState] = useState(loadStoredState);
   const [query, setQuery] = useState(storedState.query || '');
   const [limit, setLimit] = useState(clampLimit(storedState.limit || DEFAULT_LIMIT));
+  const [filters, setFilters] = useState<YoutubeSearchFilters>(() =>
+    normalizeFilters(storedState.filters),
+  );
   const [videos, setVideos] = useState<YoutubeSearchVideo[]>(storedState.videos || []);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set(storedState.selectedIds || []),
@@ -224,6 +297,7 @@ export function YoutubeKeywordSearch({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const selectedVideos = useMemo(
     () => videos.filter((video) => selectedIds.has(video.id) && !queuedVideoIds.has(video.id)),
@@ -235,6 +309,7 @@ export function YoutubeKeywordSearch({
       const state: StoredYoutubeKeywordSearchState = {
         query,
         limit,
+        filters,
         videos,
         selectedIds: Array.from(selectedIds),
         continuation,
@@ -243,7 +318,17 @@ export function YoutubeKeywordSearch({
     } catch {
       // Ignore storage failures
     }
-  }, [continuation, limit, query, selectedIds, videos]);
+  }, [continuation, filters, limit, query, selectedIds, videos]);
+
+  const updateFilters = useCallback(
+    (updater: (current: YoutubeSearchFilters) => YoutubeSearchFilters) => {
+      setFilters((current) => updater(current));
+      setContinuation(null);
+    },
+    [],
+  );
+
+  const activeFilterCount = countActiveFilters(filters);
 
   const runSearch = useCallback(
     async (nextContinuation?: string | null) => {
@@ -265,6 +350,7 @@ export function YoutubeKeywordSearch({
         const response = await invoke<YoutubeSearchResponse>('search_youtube_videos', {
           query: trimmedQuery,
           limit: clampLimit(limit),
+          filters,
           continuation: nextContinuation || null,
         });
 
@@ -280,7 +366,7 @@ export function YoutubeKeywordSearch({
         setIsLoadingMore(false);
       }
     },
-    [limit, query],
+    [filters, limit, query],
   );
 
   const toggleSelected = useCallback(
@@ -328,10 +414,64 @@ export function YoutubeKeywordSearch({
     }
   }, [onAddResults, selectedVideos]);
 
+  const setUploadDateFilter = useCallback(
+    (value: string) => {
+      updateFilters((current) => ({
+        ...current,
+        uploadDate: value === 'any' ? null : (value as YoutubeSearchUploadDateFilter),
+      }));
+    },
+    [updateFilters],
+  );
+
+  const setDurationFilter = useCallback(
+    (value: string) => {
+      updateFilters((current) => ({
+        ...current,
+        duration: value === 'any' ? null : (value as YoutubeSearchDurationFilter),
+      }));
+    },
+    [updateFilters],
+  );
+
+  const setSortFilter = useCallback(
+    (value: string) => {
+      updateFilters((current) => ({
+        ...current,
+        sort: value as YoutubeSearchSortFilter,
+      }));
+    },
+    [updateFilters],
+  );
+
+  const toggleFeatureFilter = useCallback(
+    (feature: YoutubeSearchFeatureFilter) => {
+      updateFilters((current) => {
+        const enabled = current.features.includes(feature);
+        return {
+          ...current,
+          features: enabled
+            ? current.features.filter((item) => item !== feature)
+            : [...current.features, feature],
+        };
+      });
+    },
+    [updateFilters],
+  );
+
+  const clearFilters = useCallback(() => {
+    updateFilters(() => ({ ...DEFAULT_FILTERS }));
+  }, [updateFilters]);
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     void runSearch();
   };
+
+  const clearQuery = useCallback(() => {
+    setQuery('');
+    searchInputRef.current?.focus();
+  }, []);
 
   const hasResults = videos.length > 0;
   const busy = disabled || isSearching || isLoadingMore || isAdding;
@@ -369,31 +509,184 @@ export function YoutubeKeywordSearch({
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
+                ref={searchInputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 disabled={disabled || isSearching}
                 placeholder={t('urlInput.keyword.placeholder')}
-                className="pl-10 h-12 rounded-xl bg-background border-border/60 focus:bg-background text-base sm:text-sm shadow-sm"
+                className="pl-10 pr-10 h-12 rounded-xl bg-background border-border/60 focus:bg-background text-base sm:text-sm shadow-sm"
               />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={clearQuery}
+                  disabled={disabled || isSearching}
+                  className="absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                  title={t('urlInput.clearInput')}
+                  aria-label={t('urlInput.clearInput')}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
             </div>
             <div className="flex gap-2">
-              <Select
-                value={String(limit)}
-                onValueChange={(val) => setLimit(Number(val))}
-                disabled={disabled || isSearching}
-              >
-                <SelectTrigger
-                  className="w-[85px] h-12 rounded-xl bg-background border-border/60 shadow-sm"
-                  aria-label={t('urlInput.keyword.limitLabel')}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={disabled || isSearching}
+                    className={cn(
+                      'h-12 rounded-xl border-border/60 bg-background px-4 shadow-sm',
+                      activeFilterCount > 0 && 'border-primary/40 bg-primary/5 text-primary',
+                    )}
+                  >
+                    <Filter className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">{t('urlInput.keyword.filters.title')}</span>
+                    {activeFilterCount > 0 && (
+                      <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  className="w-[min(420px,calc(100vw-2rem))] rounded-2xl p-0 shadow-xl"
                 >
-                  <SelectValue placeholder="Limit" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
+                  <div className="border-b border-border/60 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold">
+                          {t('urlInput.keyword.filters.title')}
+                        </h3>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {t('urlInput.keyword.filters.description')}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearFilters}
+                        disabled={activeFilterCount === 0}
+                        className="h-8 rounded-lg text-xs"
+                      >
+                        {t('urlInput.keyword.filters.clear')}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 p-4">
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-medium text-muted-foreground">
+                        {t('urlInput.keyword.limitLabel')}
+                      </div>
+                      <Select
+                        value={String(limit)}
+                        onValueChange={(val) => setLimit(Number(val))}
+                        disabled={disabled || isSearching}
+                      >
+                        <SelectTrigger className="h-9 rounded-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-medium text-muted-foreground">
+                          {t('urlInput.keyword.filters.uploadDate')}
+                        </div>
+                        <Select
+                          value={filters.uploadDate || 'any'}
+                          onValueChange={setUploadDateFilter}
+                        >
+                          <SelectTrigger className="h-9 rounded-lg">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">{t('urlInput.keyword.filters.any')}</SelectItem>
+                            {UPLOAD_DATE_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {t(`urlInput.keyword.filters.uploadDateOptions.${option.labelKey}`)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-medium text-muted-foreground">
+                          {t('urlInput.keyword.filters.duration')}
+                        </div>
+                        <Select value={filters.duration || 'any'} onValueChange={setDurationFilter}>
+                          <SelectTrigger className="h-9 rounded-lg">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">{t('urlInput.keyword.filters.any')}</SelectItem>
+                            {DURATION_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {t(`urlInput.keyword.filters.durationOptions.${option.labelKey}`)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-medium text-muted-foreground">
+                          {t('urlInput.keyword.filters.sort')}
+                        </div>
+                        <Select value={filters.sort || 'relevance'} onValueChange={setSortFilter}>
+                          <SelectTrigger className="h-9 rounded-lg">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SORT_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {t(`urlInput.keyword.filters.sortOptions.${option.labelKey}`)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-muted-foreground">
+                        {t('urlInput.keyword.filters.features')}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {FEATURE_OPTIONS.map((option) => {
+                          const active = filters.features.includes(option.value);
+                          return (
+                            <button
+                              type="button"
+                              key={option.value}
+                              onClick={() => toggleFeatureFilter(option.value)}
+                              className={cn(
+                                'inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors',
+                                active
+                                  ? 'border-primary/40 bg-primary/10 text-primary'
+                                  : 'border-border/70 bg-background text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                              )}
+                            >
+                              {t(`urlInput.keyword.filters.featureOptions.${option.labelKey}`)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               <Button
                 type="submit"

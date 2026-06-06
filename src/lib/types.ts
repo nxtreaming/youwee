@@ -148,6 +148,30 @@ export interface YoutubeSearchResponse {
   continuation?: string | null;
 }
 
+export type YoutubeSearchUploadDateFilter = 'today' | 'thisWeek' | 'thisMonth' | 'thisYear';
+
+export type YoutubeSearchDurationFilter = 'short' | 'medium' | 'long';
+
+export type YoutubeSearchSortFilter = 'relevance' | 'uploadDate' | 'viewCount' | 'rating';
+
+export type YoutubeSearchFeatureFilter =
+  | 'live'
+  | 'fourK'
+  | 'hd'
+  | 'subtitles'
+  | 'creativeCommons'
+  | 'threeSixty'
+  | 'vr180'
+  | 'threeD'
+  | 'hdr';
+
+export interface YoutubeSearchFilters {
+  uploadDate?: YoutubeSearchUploadDateFilter | null;
+  duration?: YoutubeSearchDurationFilter | null;
+  sort?: YoutubeSearchSortFilter | null;
+  features: YoutubeSearchFeatureFilter[];
+}
+
 export interface YoutubeSearchQueueResult {
   added: number;
   queuedIds: string[];

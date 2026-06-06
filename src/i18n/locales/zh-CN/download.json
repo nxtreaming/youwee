@@ -49,7 +49,45 @@
       "back": "返回下载",
       "pageTitle": "按关键词搜索",
       "pageDescription": "查找 YouTube 视频，并将所选结果加入队列。",
-      "added": "已添加"
+      "added": "已添加",
+      "filters": {
+        "title": "筛选",
+        "description": "搜索前缩小结果范围。",
+        "clear": "重置",
+        "any": "不限",
+        "uploadDate": "上传日期",
+        "duration": "时长",
+        "sort": "排序",
+        "features": "功能",
+        "uploadDateOptions": {
+          "today": "今天",
+          "thisWeek": "本周",
+          "thisMonth": "本月",
+          "thisYear": "今年"
+        },
+        "durationOptions": {
+          "short": "3 分钟以内",
+          "medium": "3 到 20 分钟",
+          "long": "20 分钟以上"
+        },
+        "sortOptions": {
+          "relevance": "相关性",
+          "uploadDate": "上传日期",
+          "viewCount": "观看次数",
+          "rating": "评分"
+        },
+        "featureOptions": {
+          "live": "直播",
+          "fourK": "4K",
+          "hd": "HD",
+          "subtitles": "字幕",
+          "creativeCommons": "Creative Commons",
+          "threeSixty": "360°",
+          "vr180": "VR180",
+          "threeD": "3D",
+          "hdr": "HDR"
+        }
+      }
     }
   },
   "page": {

@@ -1,4 +1,10 @@
-use crate::types::{BackendError, YoutubeSearchResponse, YoutubeSearchVideo};
+use crate::types::{
+    BackendError, YoutubeSearchDurationFilter, YoutubeSearchFeatureFilter, YoutubeSearchFilters,
+    YoutubeSearchResponse, YoutubeSearchSortFilter, YoutubeSearchUploadDateFilter,
+    YoutubeSearchVideo,
+};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -6,7 +12,6 @@ use std::collections::HashSet;
 const YOUTUBE_SEARCH_API_URL: &str = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false";
 const YOUTUBE_WEB_CLIENT_NAME: &str = "WEB";
 const YOUTUBE_WEB_CLIENT_VERSION: &str = "2.20240101.00.00";
-const YOUTUBE_VIDEO_FILTER_PARAMS: &str = "EgIQAQ==";
 const DEFAULT_SEARCH_LIMIT: u32 = 20;
 const MAX_SEARCH_LIMIT: u32 = 100;
 
@@ -14,6 +19,96 @@ fn clamp_search_limit(limit: Option<u32>) -> usize {
     limit
         .unwrap_or(DEFAULT_SEARCH_LIMIT)
         .clamp(1, MAX_SEARCH_LIMIT) as usize
+}
+
+fn write_varint(mut value: u32, output: &mut Vec<u8>) {
+    while value >= 0x80 {
+        output.push((value as u8) | 0x80);
+        value >>= 7;
+    }
+    output.push(value as u8);
+}
+
+fn write_varint_field(output: &mut Vec<u8>, field_number: u32, value: u32) {
+    write_varint(field_number << 3, output);
+    write_varint(value, output);
+}
+
+fn write_length_delimited_field(output: &mut Vec<u8>, field_number: u32, value: &[u8]) {
+    write_varint((field_number << 3) | 2, output);
+    write_varint(value.len() as u32, output);
+    output.extend_from_slice(value);
+}
+
+fn upload_date_filter_value(filter: &YoutubeSearchUploadDateFilter) -> u32 {
+    match filter {
+        YoutubeSearchUploadDateFilter::Today => 2,
+        YoutubeSearchUploadDateFilter::ThisWeek => 3,
+        YoutubeSearchUploadDateFilter::ThisMonth => 4,
+        YoutubeSearchUploadDateFilter::ThisYear => 5,
+    }
+}
+
+fn duration_filter_value(filter: &YoutubeSearchDurationFilter) -> u32 {
+    match filter {
+        YoutubeSearchDurationFilter::Short => 1,
+        YoutubeSearchDurationFilter::Long => 2,
+        YoutubeSearchDurationFilter::Medium => 3,
+    }
+}
+
+fn sort_filter_value(filter: &YoutubeSearchSortFilter) -> Option<u32> {
+    match filter {
+        YoutubeSearchSortFilter::Relevance => None,
+        YoutubeSearchSortFilter::Rating => Some(1),
+        YoutubeSearchSortFilter::UploadDate => Some(2),
+        YoutubeSearchSortFilter::ViewCount => Some(3),
+    }
+}
+
+fn feature_filter_field_number(filter: &YoutubeSearchFeatureFilter) -> u32 {
+    match filter {
+        YoutubeSearchFeatureFilter::Hd => 4,
+        YoutubeSearchFeatureFilter::Subtitles => 5,
+        YoutubeSearchFeatureFilter::CreativeCommons => 6,
+        YoutubeSearchFeatureFilter::ThreeD => 7,
+        YoutubeSearchFeatureFilter::Live => 8,
+        YoutubeSearchFeatureFilter::FourK => 14,
+        YoutubeSearchFeatureFilter::ThreeSixty => 15,
+        YoutubeSearchFeatureFilter::Hdr => 25,
+        YoutubeSearchFeatureFilter::Vr180 => 26,
+    }
+}
+
+fn build_search_params(filters: Option<&YoutubeSearchFilters>) -> String {
+    let filters = filters.cloned().unwrap_or_default();
+    let mut bytes = Vec::new();
+
+    if let Some(sort) = filters.sort.as_ref().and_then(sort_filter_value) {
+        write_varint_field(&mut bytes, 1, sort);
+    }
+
+    let mut filter_bytes = Vec::new();
+    if let Some(upload_date) = filters.upload_date.as_ref() {
+        write_varint_field(&mut filter_bytes, 1, upload_date_filter_value(upload_date));
+    }
+
+    write_varint_field(&mut filter_bytes, 2, 1);
+
+    if let Some(duration) = filters.duration.as_ref() {
+        write_varint_field(&mut filter_bytes, 3, duration_filter_value(duration));
+    }
+
+    let mut seen_features = HashSet::new();
+    for feature in filters.features {
+        if seen_features.insert(feature.clone()) {
+            write_varint_field(&mut filter_bytes, feature_filter_field_number(&feature), 1);
+        }
+    }
+
+    write_length_delimited_field(&mut bytes, 2, &filter_bytes);
+
+    STANDARD.encode(bytes)
 }
 
 fn run_text(value: Option<&Value>) -> Option<String> {
@@ -156,6 +251,7 @@ fn parse_youtube_search_response(json: &Value) -> YoutubeSearchResponse {
 async fn fetch_search_page(
     client: &reqwest::Client,
     query: &str,
+    filters: Option<&YoutubeSearchFilters>,
     continuation: Option<&str>,
 ) -> Result<YoutubeSearchResponse, String> {
     let mut body = json!({
@@ -173,7 +269,7 @@ async fn fetch_search_page(
         body["continuation"] = Value::String(token.to_string());
     } else {
         body["query"] = Value::String(query.to_string());
-        body["params"] = Value::String(YOUTUBE_VIDEO_FILTER_PARAMS.to_string());
+        body["params"] = Value::String(build_search_params(filters));
     }
 
     let response = client
@@ -213,6 +309,7 @@ async fn fetch_search_page(
 pub async fn search_youtube_videos(
     query: String,
     limit: Option<u32>,
+    filters: Option<YoutubeSearchFilters>,
     continuation: Option<String>,
 ) -> Result<YoutubeSearchResponse, String> {
     let query = query.trim().to_string();
@@ -239,7 +336,13 @@ pub async fn search_youtube_videos(
     let mut next_continuation = initial_continuation;
 
     loop {
-        let page = fetch_search_page(&client, &query, next_continuation.as_deref()).await?;
+        let page = fetch_search_page(
+            &client,
+            &query,
+            filters.as_ref(),
+            next_continuation.as_deref(),
+        )
+        .await?;
         for video in page.videos {
             if !videos
                 .iter()
@@ -268,6 +371,28 @@ pub async fn search_youtube_videos(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn builds_default_video_filter_params() {
+        assert_eq!(build_search_params(None), "EgIQAQ==");
+    }
+
+    #[test]
+    fn builds_combined_filter_params() {
+        let params = build_search_params(Some(&YoutubeSearchFilters {
+            upload_date: Some(YoutubeSearchUploadDateFilter::ThisWeek),
+            duration: Some(YoutubeSearchDurationFilter::Long),
+            sort: Some(YoutubeSearchSortFilter::ViewCount),
+            features: vec![
+                YoutubeSearchFeatureFilter::Hd,
+                YoutubeSearchFeatureFilter::FourK,
+                YoutubeSearchFeatureFilter::Hdr,
+                YoutubeSearchFeatureFilter::Hd,
+            ],
+        }));
+
+        assert_eq!(params, "CAMSDQgDEAEYAiABcAHIAQE=");
+    }
 
     #[test]
     fn parses_video_renderer_and_continuation() {

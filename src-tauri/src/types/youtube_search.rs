@@ -17,3 +17,53 @@ pub struct YoutubeSearchResponse {
     pub videos: Vec<YoutubeSearchVideo>,
     pub continuation: Option<String>,
 }
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct YoutubeSearchFilters {
+    pub upload_date: Option<YoutubeSearchUploadDateFilter>,
+    pub duration: Option<YoutubeSearchDurationFilter>,
+    pub sort: Option<YoutubeSearchSortFilter>,
+    #[serde(default)]
+    pub features: Vec<YoutubeSearchFeatureFilter>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum YoutubeSearchUploadDateFilter {
+    Today,
+    ThisWeek,
+    ThisMonth,
+    ThisYear,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum YoutubeSearchDurationFilter {
+    Short,
+    Medium,
+    Long,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum YoutubeSearchSortFilter {
+    Relevance,
+    UploadDate,
+    ViewCount,
+    Rating,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum YoutubeSearchFeatureFilter {
+    Live,
+    FourK,
+    Hd,
+    Subtitles,
+    CreativeCommons,
+    ThreeSixty,
+    Vr180,
+    ThreeD,
+    Hdr,
+}
