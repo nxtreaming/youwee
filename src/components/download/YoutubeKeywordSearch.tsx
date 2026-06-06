@@ -2,13 +2,13 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   AlertCircle,
   ArrowLeft,
+  Check,
   CheckCircle2,
   CheckSquare,
   ListPlus,
   Loader2,
   Plus,
   Search,
-  Square,
   Video,
   X,
 } from 'lucide-react';
@@ -102,22 +102,19 @@ function SearchResultGridItem({
   disabled: boolean;
 }) {
   const { t } = useTranslation('download');
+
   return (
     <button
       type="button"
       onClick={onToggle}
       disabled={disabled || isAdded}
       className={cn(
-        'group relative flex flex-col text-left transition-all duration-300 rounded-xl overflow-hidden border bg-card/40 hover:bg-card hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/50',
-        isAdded
-          ? 'opacity-70 cursor-not-allowed border-emerald-500/30'
-          : selected
-            ? 'border-primary shadow-sm bg-primary/5'
-            : 'border-border/50',
+        'group relative flex flex-col text-left transition-all duration-300 rounded-xl focus:outline-none',
+        isAdded ? 'cursor-not-allowed opacity-70 grayscale-[0.4]' : 'cursor-pointer',
       )}
     >
       {/* Thumbnail Area */}
-      <div className="relative w-full aspect-video bg-muted overflow-hidden">
+      <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-muted">
         {video.thumbnail ? (
           <img
             src={video.thumbnail}
@@ -134,52 +131,73 @@ function SearchResultGridItem({
           </div>
         )}
 
-        {/* Hover/Selected Overlay */}
+        {/* Selected Border & Tint Overlay */}
+        {selected && !isAdded && (
+          <div className="absolute inset-0 rounded-xl ring-2 ring-inset ring-primary bg-primary/10 z-10 pointer-events-none transition-all duration-300" />
+        )}
+
+        {/* Checkbox Icon (Hover & Selected) */}
         {!isAdded && (
           <div
             className={cn(
-              'absolute inset-0 bg-black/40 transition-opacity flex items-start justify-end p-2',
+              'absolute top-2 left-2 z-20 transition-opacity duration-200',
               selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
             )}
           >
             {selected ? (
-              <CheckSquare className="w-5 h-5 text-primary bg-background/90 rounded-[3px]" />
+              <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md ring-2 ring-background">
+                <Check className="w-4 h-4 stroke-[3]" />
+              </div>
             ) : (
-              <Square className="w-5 h-5 text-white/80" />
+              <div className="w-6 h-6 rounded-full border-2 border-white/80 bg-black/20 backdrop-blur-sm flex items-center justify-center shadow-sm transition-colors hover:bg-black/40" />
             )}
           </div>
         )}
 
+        {/* Subtle top gradient for hover checkbox visibility */}
+        {!isAdded && !selected && (
+          <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10" />
+        )}
+
         {/* Added Overlay */}
         {isAdded && (
-          <div className="absolute inset-0 bg-emerald-500/20 flex flex-col items-center justify-center backdrop-blur-[1px]">
-            <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-1" />
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full backdrop-blur-md">
-              {t('urlInput.keyword.added')}
-            </span>
+          <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 bg-background/20 backdrop-blur-[1px]" />
+            <div className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/90 backdrop-blur-md border border-border shadow-sm text-foreground">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span className="text-xs font-semibold">{t('urlInput.keyword.added')}</span>
+            </div>
           </div>
         )}
 
         {/* Duration */}
         {video.duration && !isAdded && (
-          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-[10px] font-medium text-white shadow-sm backdrop-blur-md">
+          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded text-[12px] font-medium text-white bg-black/80 tracking-wide backdrop-blur-md">
             {video.duration}
           </span>
         )}
       </div>
 
       {/* Info Area */}
-      <div className="p-3 flex-1 flex flex-col">
-        <p className="text-sm font-semibold leading-tight line-clamp-2" title={video.title}>
-          {video.title}
-        </p>
-        <div className="mt-2 flex flex-col gap-0.5 text-[11px] text-muted-foreground">
-          {video.channel && (
-            <span className="font-medium text-foreground/80 truncate">{video.channel}</span>
-          )}
-          <div className="flex items-center gap-2 truncate opacity-80">
-            {video.view_count_text && <span>{video.view_count_text}</span>}
-            {video.published_time_text && <span>{video.published_time_text}</span>}
+      <div className="flex gap-3 items-start mt-3 px-1">
+        <div className="flex-1 min-w-0 flex flex-col">
+          <p
+            className="text-sm font-medium leading-tight line-clamp-2 text-foreground"
+            title={video.title}
+          >
+            {video.title}
+          </p>
+          <div className="mt-1 flex flex-col gap-0.5 text-[13px] text-muted-foreground/80">
+            {video.channel && (
+              <span className="truncate hover:text-foreground transition-colors">
+                {video.channel}
+              </span>
+            )}
+            <div className="flex items-center gap-1.5 truncate">
+              {video.view_count_text && <span>{video.view_count_text}</span>}
+              {video.view_count_text && video.published_time_text && <span>•</span>}
+              {video.published_time_text && <span>{video.published_time_text}</span>}
+            </div>
           </div>
         </div>
       </div>
@@ -319,7 +337,7 @@ export function YoutubeKeywordSearch({
   const busy = disabled || isSearching || isLoadingMore || isAdding;
 
   return (
-    <div className="flex flex-col h-full bg-background rounded-xl border border-border/50 overflow-hidden shadow-sm">
+    <div className="flex flex-col h-full bg-background rounded-xl border border-border/50 overflow-hidden shadow-sm relative">
       {/* Header & Search Form */}
       <div className="flex-shrink-0 border-b border-border/50 bg-card/20">
         <div className="p-4 sm:p-6 sm:pb-5 space-y-5">
@@ -425,7 +443,7 @@ export function YoutubeKeywordSearch({
           </div>
         ) : (
           <ScrollArea className="h-full">
-            <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 pb-6">
+            <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 pb-24 sm:pb-28">
               {videos.map((video) => (
                 <SearchResultGridItem
                   key={video.id}
@@ -441,68 +459,86 @@ export function YoutubeKeywordSearch({
         )}
       </div>
 
-      {/* Action Bar (Floating-like style) */}
+      {/* Action Bar (Floating Pill Style) */}
       {hasResults && (
-        <div className="flex-shrink-0 border-t border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 p-3 sm:p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="text-sm font-medium text-muted-foreground px-1">
-              {t('urlInput.keyword.selectedCount', {
-                selected: selectedVideos.length,
-                total: videos.length,
-              })}
+        <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-10 w-full max-w-fit px-4 pointer-events-none animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="bg-background/80 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/60 border border-border/50 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] rounded-full p-1.5 flex items-center gap-1 sm:gap-2 pointer-events-auto ring-1 ring-white/10 transition-all">
+            {/* Selection Status */}
+            <div className="hidden sm:flex items-center pl-4 pr-2 py-1.5">
+              <span className="text-sm font-semibold text-foreground whitespace-nowrap">
+                {t('urlInput.keyword.selectedCount', {
+                  selected: selectedVideos.length,
+                  total: videos.length,
+                })}
+              </span>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+
+            {/* Mobile Selection Status */}
+            <div className="sm:hidden flex items-center pl-3 pr-1 py-1.5">
+              <span className="text-sm font-bold text-foreground whitespace-nowrap">
+                {selectedVideos.length}/{videos.length}
+              </span>
+            </div>
+
+            <div className="w-px h-5 bg-border/60 mx-1" />
+
+            {/* Controls */}
+            <div className="flex items-center gap-1">
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="icon"
                 onClick={selectAll}
                 disabled={busy || videos.every((v) => queuedVideoIds.has(v.id))}
-                className="h-10 px-3 text-sm font-medium rounded-lg"
+                className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
+                title={t('urlInput.keyword.selectAll')}
               >
-                <CheckSquare className="w-4 h-4 mr-1.5" />
-                {t('urlInput.keyword.selectAll')}
+                <CheckSquare className="w-4 h-4" />
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="icon"
                 onClick={clearSelection}
                 disabled={busy || selectedVideos.length === 0}
-                className="h-10 px-3 text-sm font-medium rounded-lg"
+                className="h-9 w-9 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title={t('urlInput.keyword.clearSelection')}
               >
-                <X className="w-4 h-4 mr-1.5" />
-                {t('urlInput.keyword.clearSelection')}
+                <X className="w-4 h-4" />
               </Button>
-              <div className="w-px h-6 bg-border/60 mx-1 hidden sm:block" />
+            </div>
+
+            <div className="w-px h-5 bg-border/60 mx-1" />
+
+            {/* Load More & Add */}
+            <div className="flex items-center gap-1.5 pr-0.5">
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
+                variant="secondary"
                 onClick={() => void runSearch(continuation)}
                 disabled={busy || !continuation}
-                className="h-10 px-4 text-sm font-medium rounded-lg shadow-sm"
+                className="h-9 px-4 rounded-full text-sm font-medium bg-secondary/60 hover:bg-secondary/80 transition-colors"
               >
                 {isLoadingMore ? (
-                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 sm:mr-1.5 animate-spin" />
                 ) : (
-                  <ListPlus className="w-4 h-4 mr-1.5" />
+                  <ListPlus className="w-4 h-4 sm:mr-1.5" />
                 )}
-                {t('urlInput.keyword.loadMore')}
+                <span className="hidden sm:inline">{t('urlInput.keyword.loadMore')}</span>
               </Button>
               <Button
                 type="button"
-                size="sm"
                 onClick={() => void addSelected()}
                 disabled={busy || selectedVideos.length === 0}
-                className="h-10 px-5 text-sm font-medium rounded-lg shadow-sm"
+                className="h-9 px-5 rounded-full text-sm font-semibold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all active:scale-95"
               >
                 {isAdding ? (
-                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 sm:mr-1.5 animate-spin" />
                 ) : (
-                  <Plus className="w-4 h-4 mr-1.5" />
+                  <Plus className="w-4 h-4 sm:mr-1.5" />
                 )}
-                {t('urlInput.keyword.addSelected')}
+                <span className="hidden sm:inline">{t('urlInput.keyword.addSelected')}</span>
+                <span className="sm:hidden">{t('urlInput.keyword.addSelected').split(' ')[0]}</span>
               </Button>
             </div>
           </div>
