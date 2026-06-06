@@ -61,8 +61,11 @@ import type {
   SubtitleMode,
   TelegramStatus,
   VideoCodec,
+  YoutubeSearchQueueResult,
+  YoutubeSearchVideo,
 } from '@/lib/types';
 import { DEFAULT_SPONSORBLOCK_CATEGORIES } from '@/lib/types';
+import { extractYouTubeVideoId } from '@/lib/youtube-url';
 
 const STORAGE_KEY = 'youwee-settings';
 const DOWNLOAD_QUEUE_IDLE_GRACE_MS = 1000;
@@ -185,6 +188,7 @@ interface DownloadContextType {
   proxySettings: ProxySettings;
   currentPlaylistInfo: PlaylistInfo | null;
   addFromText: (text: string) => Promise<number>;
+  addSearchResultsToQueue: (results: YoutubeSearchVideo[]) => Promise<YoutubeSearchQueueResult>;
   enqueueExternalUrl: (
     url: string,
     options?: ExternalEnqueueOptions,
@@ -755,6 +759,84 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       focusItem(newItem.id);
       enqueueQueuedWorkflowForItems([newItem]);
       return { added: true, itemId: newItem.id };
+    },
+    [enqueueQueuedWorkflowForItems, focusItem],
+  );
+
+  const addSearchResultsToQueue = useCallback(
+    async (results: YoutubeSearchVideo[]): Promise<YoutubeSearchQueueResult> => {
+      if (results.length === 0) return { added: 0, queuedIds: [] };
+
+      const workflowSnapshots = loadPluginWorkflowSnapshots();
+      const currentSettings = settingsRef.current;
+      const settingsSnapshot: ItemDownloadSettings = {
+        quality: currentSettings.quality,
+        format: currentSettings.format,
+        outputPath: currentSettings.outputPath,
+        videoCodec: currentSettings.videoCodec,
+        audioBitrate: currentSettings.audioBitrate,
+        useAria2: currentSettings.useAria2,
+        aria2Args: currentSettings.aria2Args,
+        subtitleMode: currentSettings.subtitleMode,
+        subtitleLangs: [...currentSettings.subtitleLangs],
+        subtitleEmbed: currentSettings.subtitleEmbed,
+        subtitleFormat: currentSettings.subtitleFormat,
+        pluginWorkflowSnapshots: workflowSnapshots,
+        postDownloadWorkflowSteps: loadPostDownloadWorkflowSteps(),
+        autoRetryEnabled: currentSettings.autoRetryEnabled,
+        autoRetryMaxAttempts: currentSettings.autoRetryMaxAttempts,
+        autoRetryDelaySeconds: currentSettings.autoRetryDelaySeconds,
+      };
+
+      const currentItems = itemsRef.current;
+      const seenUrls = new Set(currentItems.map((item) => item.url));
+      const seenYoutubeIds = new Set(
+        currentItems
+          .map((item) => extractYouTubeVideoId(item.url))
+          .filter((id): id is string => id !== null),
+      );
+      const newItems: DownloadItem[] = [];
+      const queuedIds: string[] = [];
+
+      for (const result of results) {
+        const url = result.url.trim();
+        if (!url) continue;
+        const videoId = result.id || extractYouTubeVideoId(url);
+        if (seenUrls.has(url) || (videoId && seenYoutubeIds.has(videoId))) {
+          queuedIds.push(result.id);
+          continue;
+        }
+        seenUrls.add(url);
+        if (videoId) {
+          seenYoutubeIds.add(videoId);
+        }
+        queuedIds.push(result.id);
+
+        newItems.push({
+          id: crypto.randomUUID(),
+          url,
+          title: result.title || url,
+          status: 'pending',
+          progress: 0,
+          speed: '',
+          eta: '',
+          isPlaylist: false,
+          thumbnail: result.thumbnail || undefined,
+          duration: result.duration || undefined,
+          channel: result.channel || undefined,
+          extractor: 'youtube',
+          settings: settingsSnapshot,
+        });
+      }
+
+      if (newItems.length === 0) return { added: 0, queuedIds };
+
+      const nextItems = [...itemsRef.current, ...newItems];
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+      focusItem(newItems[0].id);
+      enqueueQueuedWorkflowForItems(newItems);
+      return { added: newItems.length, queuedIds };
     },
     [enqueueQueuedWorkflowForItems, focusItem],
   );
@@ -1566,6 +1648,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     proxySettings,
     currentPlaylistInfo,
     addFromText,
+    addSearchResultsToQueue,
     enqueueExternalUrl,
     focusItem,
     importFromFile,
