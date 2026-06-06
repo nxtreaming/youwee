@@ -36,7 +36,7 @@ pub fn normalize_url(url: &str) -> String {
     let lower = url.to_lowercase();
 
     if lower.contains("youtube.com/") {
-        if let Some(normalized) = normalize_youtube_channel_videos_url(url) {
+        if let Some(normalized) = normalize_youtube_channel_root_tab_url(url, "videos") {
             return normalized;
         }
     }
@@ -50,12 +50,44 @@ pub fn normalize_url(url: &str) -> String {
     url.to_string()
 }
 
-/// Normalize YouTube channel root URLs to their Videos tab.
-/// yt-dlp extracts fewer entries from a channel home tab than from /videos.
-fn normalize_youtube_channel_videos_url(url: &str) -> Option<String> {
+/// Normalize a YouTube channel URL to one or more content tabs.
+/// Non-YouTube URLs, video URLs, and playlist URLs are returned unchanged.
+pub fn normalize_channel_content_urls(
+    url: &str,
+    youtube_content_type: Option<&str>,
+) -> Vec<String> {
+    let lower = url.to_lowercase();
+    if !lower.contains("youtube.com/") {
+        return vec![normalize_url(url)];
+    }
+
+    match youtube_content_type.unwrap_or("videos") {
+        "shorts" => normalize_youtube_channel_tab_url(url, "shorts")
+            .map(|url| vec![url])
+            .unwrap_or_else(|| vec![normalize_url(url)]),
+        "streams" => normalize_youtube_channel_tab_url(url, "streams")
+            .map(|url| vec![url])
+            .unwrap_or_else(|| vec![normalize_url(url)]),
+        "videos_shorts" => {
+            let videos = normalize_youtube_channel_tab_url(url, "videos");
+            let shorts = normalize_youtube_channel_tab_url(url, "shorts");
+            match (videos, shorts) {
+                (Some(videos), Some(shorts)) => vec![videos, shorts],
+                _ => vec![normalize_url(url)],
+            }
+        }
+        _ => normalize_youtube_channel_tab_url(url, "videos")
+            .map(|url| vec![url])
+            .unwrap_or_else(|| vec![normalize_url(url)]),
+    }
+}
+
+/// Normalize YouTube channel URLs to a specific content tab.
+/// yt-dlp extracts fewer entries from a channel home tab than from a direct tab.
+fn normalize_youtube_channel_root_tab_url(url: &str, tab: &str) -> Option<String> {
     let mut parsed = reqwest::Url::parse(url).ok()?;
-    let host = parsed.host_str()?.trim_start_matches("www.");
-    if host != "youtube.com" {
+    let host = parsed.host_str()?;
+    if !is_youtube_host(host) {
         return None;
     }
 
@@ -64,21 +96,78 @@ fn normalize_youtube_channel_videos_url(url: &str) -> Option<String> {
         .map(|segments| segments.filter(|segment| !segment.is_empty()).collect())
         .unwrap_or_default();
 
-    let is_channel_root = match segments.as_slice() {
-        [handle] if handle.starts_with('@') && handle.len() > 1 => true,
-        ["channel", channel_id] if !channel_id.is_empty() => true,
-        ["c", channel_name] if !channel_name.is_empty() => true,
-        ["user", user_name] if !user_name.is_empty() => true,
-        _ => false,
+    let channel_segments: Option<&[&str]> = match segments.as_slice() {
+        [handle] if handle.starts_with('@') && handle.len() > 1 => Some(&segments[0..1]),
+        ["channel", channel_id] if !channel_id.is_empty() => Some(&segments[0..2]),
+        ["c", channel_name] if !channel_name.is_empty() => Some(&segments[0..2]),
+        ["user", user_name] if !user_name.is_empty() => Some(&segments[0..2]),
+        _ => None,
     };
 
-    if !is_channel_root {
+    let channel_segments = channel_segments?;
+
+    let normalized_path = format!("/{}/{}", channel_segments.join("/"), tab);
+    parsed.set_path(&normalized_path);
+    Some(parsed.to_string())
+}
+
+/// Normalize YouTube channel root or tab URLs to a specific content tab.
+fn normalize_youtube_channel_tab_url(url: &str, tab: &str) -> Option<String> {
+    let mut parsed = reqwest::Url::parse(url).ok()?;
+    let host = parsed.host_str()?;
+    if !is_youtube_host(host) {
         return None;
     }
 
-    let normalized_path = format!("/{}/videos", segments.join("/"));
+    let segments: Vec<&str> = parsed
+        .path_segments()
+        .map(|segments| segments.filter(|segment| !segment.is_empty()).collect())
+        .unwrap_or_default();
+
+    let channel_segments: Option<&[&str]> = match segments.as_slice() {
+        [handle] if handle.starts_with('@') && handle.len() > 1 => Some(&segments[0..1]),
+        [handle, current_tab]
+            if handle.starts_with('@')
+                && handle.len() > 1
+                && is_youtube_channel_content_tab(current_tab) =>
+        {
+            Some(&segments[0..1])
+        }
+        ["channel", channel_id] if !channel_id.is_empty() => Some(&segments[0..2]),
+        ["channel", channel_id, current_tab]
+            if !channel_id.is_empty() && is_youtube_channel_content_tab(current_tab) =>
+        {
+            Some(&segments[0..2])
+        }
+        ["c", channel_name] if !channel_name.is_empty() => Some(&segments[0..2]),
+        ["c", channel_name, current_tab]
+            if !channel_name.is_empty() && is_youtube_channel_content_tab(current_tab) =>
+        {
+            Some(&segments[0..2])
+        }
+        ["user", user_name] if !user_name.is_empty() => Some(&segments[0..2]),
+        ["user", user_name, current_tab]
+            if !user_name.is_empty() && is_youtube_channel_content_tab(current_tab) =>
+        {
+            Some(&segments[0..2])
+        }
+        _ => None,
+    };
+
+    let channel_segments = channel_segments?;
+
+    let normalized_path = format!("/{}/{}", channel_segments.join("/"), tab);
     parsed.set_path(&normalized_path);
     Some(parsed.to_string())
+}
+
+fn is_youtube_channel_content_tab(tab: &str) -> bool {
+    matches!(tab, "videos" | "shorts" | "streams")
+}
+
+fn is_youtube_host(host: &str) -> bool {
+    let host = host.trim_start_matches("www.");
+    host == "youtube.com" || host.ends_with(".youtube.com")
 }
 
 /// Try to normalize a Douyin modal URL to a direct video URL.
@@ -405,6 +494,54 @@ mod tests {
         ] {
             assert_eq!(normalize_url(input), input);
         }
+    }
+
+    #[test]
+    fn youtube_channel_content_type_short_normalizes_to_shorts_tab() {
+        let input = "https://www.youtube.com/@channelname";
+        assert_eq!(
+            normalize_channel_content_urls(input, Some("shorts")),
+            vec!["https://www.youtube.com/@channelname/shorts".to_string()]
+        );
+    }
+
+    #[test]
+    fn youtube_channel_content_type_streams_normalizes_to_streams_tab() {
+        let input = "https://www.youtube.com/@channelname/videos";
+        assert_eq!(
+            normalize_channel_content_urls(input, Some("streams")),
+            vec!["https://www.youtube.com/@channelname/streams".to_string()]
+        );
+    }
+
+    #[test]
+    fn youtube_channel_content_type_videos_shorts_returns_both_tabs() {
+        let input = "https://www.youtube.com/channel/UCabc123";
+        assert_eq!(
+            normalize_channel_content_urls(input, Some("videos_shorts")),
+            vec![
+                "https://www.youtube.com/channel/UCabc123/videos".to_string(),
+                "https://www.youtube.com/channel/UCabc123/shorts".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn channel_content_type_does_not_touch_non_youtube_urls() {
+        let input = "https://space.bilibili.com/12345";
+        assert_eq!(
+            normalize_channel_content_urls(input, Some("shorts")),
+            vec![input.to_string()]
+        );
+    }
+
+    #[test]
+    fn youtube_unsupported_channel_tabs_are_not_rewritten_by_content_type() {
+        let input = "https://www.youtube.com/@channelname/playlists";
+        assert_eq!(
+            normalize_channel_content_urls(input, Some("shorts")),
+            vec![input.to_string()]
+        );
     }
 
     #[test]
