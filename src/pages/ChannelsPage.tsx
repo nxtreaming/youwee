@@ -29,6 +29,7 @@ import {
 } from '@/components/download/ThumbnailStatusBadge';
 import { FFmpegRequiredDialog } from '@/components/FFmpegRequiredDialog';
 import { ThemePicker } from '@/components/settings/ThemePicker';
+import { EmptyStateIllustration } from '@/components/shared/EmptyStateIllustration';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,7 +44,14 @@ import { Switch } from '@/components/ui/switch';
 import type { VideoDownloadState } from '@/contexts/ChannelsContext';
 import { detectPlatform, isSupportedPlatform, useChannels } from '@/contexts/ChannelsContext';
 import { useDependencies } from '@/contexts/DependenciesContext';
-import type { FollowedChannel, Format, PlaylistVideoEntry, Quality, VideoCodec } from '@/lib/types';
+import type {
+  FollowedChannel,
+  Format,
+  PlaylistVideoEntry,
+  Quality,
+  VideoCodec,
+  YoutubeChannelContentType,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 // ── Quality / Format options (matching SettingsPanel) ─────────────────
@@ -76,6 +84,13 @@ const videoCodecOptions: { value: VideoCodec; label: string }[] = [
   { value: 'h264', label: 'H.264' },
   { value: 'vp9', label: 'VP9' },
   { value: 'av1', label: 'AV1' },
+];
+
+const youtubeContentTypeOptions: YoutubeChannelContentType[] = [
+  'videos',
+  'shorts',
+  'streams',
+  'videos_shorts',
 ];
 
 // Qualities that require FFmpeg for video+audio merging
@@ -178,6 +193,46 @@ function formatUploadDate(dateStr?: string): string {
   return dateStr;
 }
 
+function getYoutubeContentTypeFromUrl(url: string): YoutubeChannelContentType {
+  try {
+    const parsed = new URL(url);
+    if (!isYoutubeChannelContentUrl(url)) return 'videos';
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    const tab = segments.at(-1);
+    if (tab === 'shorts') return 'shorts';
+    if (tab === 'streams') return 'streams';
+  } catch {
+    // ignore invalid URLs while typing
+  }
+  return 'videos';
+}
+
+function isYoutubeChannelContentUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '');
+    if (host !== 'youtube.com' && !host.endsWith('.youtube.com')) return false;
+
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    if (segments.length === 0) return false;
+
+    const isContentTab =
+      segments.length === 2 && ['videos', 'shorts', 'streams'].includes(segments[1]);
+    const isNestedContentTab =
+      segments.length === 3 && ['videos', 'shorts', 'streams'].includes(segments[2]);
+
+    if (segments[0].startsWith('@') && segments[0].length > 1) {
+      return segments.length === 1 || isContentTab;
+    }
+    if (['channel', 'c', 'user'].includes(segments[0]) && segments[1]) {
+      return segments.length === 2 || isNestedContentTab;
+    }
+  } catch {
+    // ignore invalid URLs while typing
+  }
+  return false;
+}
+
 // ── Quality / Format Settings Bar (matching SettingsPanel) ───────────
 
 function ChannelSettingsBar({
@@ -191,6 +246,9 @@ function ChannelSettingsBar({
   onAudioModeToggle,
   outputPath,
   onSelectFolder,
+  youtubeContentType,
+  onYoutubeContentTypeChange,
+  showYoutubeContentType,
   disabled,
 }: {
   quality: Quality;
@@ -203,6 +261,9 @@ function ChannelSettingsBar({
   onAudioModeToggle: () => void;
   outputPath: string;
   onSelectFolder: () => void;
+  youtubeContentType?: YoutubeChannelContentType;
+  onYoutubeContentTypeChange?: (value: YoutubeChannelContentType) => void;
+  showYoutubeContentType?: boolean;
   disabled?: boolean;
 }) {
   const formatOptions = isAudioMode ? audioFormatOptions : videoFormatOptions;
@@ -301,6 +362,14 @@ function ChannelSettingsBar({
         </Select>
       )}
 
+      {showYoutubeContentType && youtubeContentType && onYoutubeContentTypeChange && (
+        <YoutubeContentTypeSelect
+          value={youtubeContentType}
+          onChange={onYoutubeContentTypeChange}
+          disabled={disabled}
+        />
+      )}
+
       {/* Spacer */}
       <div className="flex-1" />
 
@@ -316,6 +385,37 @@ function ChannelSettingsBar({
         <span className="truncate">{outputFolderName || 'Select Folder'}</span>
       </button>
     </div>
+  );
+}
+
+function YoutubeContentTypeSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: YoutubeChannelContentType;
+  onChange: (value: YoutubeChannelContentType) => void;
+  disabled?: boolean;
+}) {
+  const { t } = useTranslation('channels');
+
+  return (
+    <Select
+      value={value}
+      onValueChange={(next) => onChange(next as YoutubeChannelContentType)}
+      disabled={disabled}
+    >
+      <SelectTrigger className="w-[135px] h-9 text-xs bg-card/50 border-border/50">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {youtubeContentTypeOptions.map((option) => (
+          <SelectItem key={option} value={option} className="text-xs">
+            {t(`youtubeContentTypes.${option}`)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -526,14 +626,18 @@ export function ChannelsPage() {
     browseFetchProgress,
     browseHasMore,
     browseLoadingMore,
+    browseYoutubeContentType,
     loadMoreChannelVideos,
   } = useChannels();
 
   const { ffmpegStatus } = useDependencies();
 
   const [urlInput, setUrlInput] = useState(browseUrl);
+  const [youtubeContentType, setYoutubeContentType] =
+    useState<YoutubeChannelContentType>(browseYoutubeContentType);
   const [followingUrl, setFollowingUrl] = useState(false);
   const [channelsCollapsed, setChannelsCollapsed] = useState(false);
+  const showYoutubeContentType = isYoutubeChannelContentUrl(urlInput.trim());
 
   // Settings state - initialized from shared localStorage (same as DownloadPage)
   const [initSettings] = useState(loadInitialSettings);
@@ -592,9 +696,10 @@ export function ChannelsPage() {
     if (!isSupportedPlatform(url)) {
       return;
     }
+    const contentType = isYoutubeChannelContentUrl(url) ? youtubeContentType : 'videos';
     setBrowseUrl(url);
-    fetchChannelVideos(url);
-  }, [urlInput, setBrowseUrl, fetchChannelVideos]);
+    fetchChannelVideos(url, undefined, contentType);
+  }, [urlInput, youtubeContentType, setBrowseUrl, fetchChannelVideos]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -627,12 +732,18 @@ export function ChannelsPage() {
     try {
       const thumbnail =
         browseChannelAvatar || (browseVideos.length > 0 ? browseVideos[0].thumbnail : undefined);
-      await followChannel(browseUrl, browseChannelName, thumbnail ?? undefined, {
-        quality: isAudioMode ? 'audio' : quality,
-        format,
-        videoCodec,
-        audioBitrate: '192',
-      });
+      await followChannel(
+        browseUrl,
+        browseChannelName,
+        thumbnail ?? undefined,
+        {
+          quality: isAudioMode ? 'audio' : quality,
+          format,
+          videoCodec,
+          audioBitrate: '192',
+        },
+        isYoutubeChannelContentUrl(browseUrl) ? youtubeContentType : 'videos',
+      );
     } catch (error) {
       console.error('Follow failed:', error);
     } finally {
@@ -648,6 +759,7 @@ export function ChannelsPage() {
     format,
     videoCodec,
     isAudioMode,
+    youtubeContentType,
   ]);
 
   const isAlreadyFollowing = followedChannels.some(
@@ -701,7 +813,13 @@ export function ChannelsPage() {
             <Input
               type="url"
               value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
+              onChange={(e) => {
+                const nextUrl = e.target.value;
+                setUrlInput(nextUrl);
+                if (isYoutubeChannelContentUrl(nextUrl)) {
+                  setYoutubeContentType(getYoutubeContentTypeFromUrl(nextUrl));
+                }
+              }}
               onKeyDown={handleKeyDown}
               placeholder={t('urlPlaceholder')}
               disabled={browseLoading}
@@ -717,6 +835,7 @@ export function ChannelsPage() {
                 type="button"
                 onClick={() => {
                   setUrlInput('');
+                  setYoutubeContentType('videos');
                   clearBrowse();
                 }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
@@ -773,6 +892,9 @@ export function ChannelsPage() {
           onAudioModeToggle={handleAudioModeToggle}
           outputPath={outputPath}
           onSelectFolder={selectOutputFolder}
+          youtubeContentType={youtubeContentType}
+          onYoutubeContentTypeChange={setYoutubeContentType}
+          showYoutubeContentType={showYoutubeContentType}
           disabled={isDownloading}
         />
       </div>
@@ -912,9 +1034,7 @@ export function ChannelsPage() {
             {/* Empty state */}
             {!browseLoading && browseVideos.length === 0 && !browseError && !browseChannelName && (
               <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="w-16 h-16 rounded-2xl bg-primary/5 flex items-center justify-center mb-4">
-                  <Tv className="w-7 h-7 text-primary/40" />
-                </div>
+                <EmptyStateIllustration className="mb-5" icon={Tv} size="sm" />
                 <h3 className="text-sm font-medium text-muted-foreground mb-1">
                   {followedChannels.length === 0 ? t('noChannels') : t('browseChannel')}
                 </h3>
@@ -1205,6 +1325,7 @@ function ChannelDetailView({ channel, onBack }: { channel: FollowedChannel; onBa
     videoStates,
     outputPath,
     selectOutputFolder,
+    setActiveChannel,
   } = useChannels();
 
   const { ffmpegStatus } = useDependencies();
@@ -1245,6 +1366,8 @@ function ChannelDetailView({ channel, onBack }: { channel: FollowedChannel; onBa
   const [settingsDownloadAudioBitrate, setSettingsDownloadAudioBitrate] = useState(
     channel.download_audio_bitrate || '192',
   );
+  const [settingsYoutubeContentType, setSettingsYoutubeContentType] =
+    useState<YoutubeChannelContentType>(channel.youtube_content_type || 'videos');
   const [settingsIsAudioMode, setSettingsIsAudioMode] = useState(
     channel.download_quality === 'audio' ||
       ['mp3', 'm4a', 'opus'].includes(channel.download_format),
@@ -1271,6 +1394,7 @@ function ChannelDetailView({ channel, onBack }: { channel: FollowedChannel; onBa
     setSettingsDownloadFormat(channel.download_format || 'mp4');
     setSettingsDownloadVideoCodec(channel.download_video_codec || 'h264');
     setSettingsDownloadAudioBitrate(channel.download_audio_bitrate || '192');
+    setSettingsYoutubeContentType(channel.youtube_content_type || 'videos');
     setSettingsIsAudioMode(
       channel.download_quality === 'audio' ||
         ['mp3', 'm4a', 'opus'].includes(channel.download_format),
@@ -1294,6 +1418,31 @@ function ChannelDetailView({ channel, onBack }: { channel: FollowedChannel; onBa
         filterExcludeKeywords: settingsFilterExcludeKeywords || null,
         filterMaxVideos: settingsFilterMaxVideos ? Number(settingsFilterMaxVideos) : null,
         downloadThreads: Math.max(1, settingsDownloadThreads),
+        youtubeContentType: isYoutubeChannelContentUrl(channel.url)
+          ? settingsYoutubeContentType
+          : 'videos',
+      });
+      setActiveChannel({
+        ...channel,
+        check_interval: Math.max(5, settingsCheckInterval),
+        auto_download: settingsAutoDownload,
+        download_quality: settingsIsAudioMode ? 'audio' : settingsDownloadQuality,
+        download_format: settingsDownloadFormat,
+        download_video_codec: settingsDownloadVideoCodec,
+        download_audio_bitrate: settingsDownloadAudioBitrate,
+        filter_min_duration: settingsFilterMinDuration
+          ? Number(settingsFilterMinDuration)
+          : undefined,
+        filter_max_duration: settingsFilterMaxDuration
+          ? Number(settingsFilterMaxDuration)
+          : undefined,
+        filter_include_keywords: settingsFilterIncludeKeywords || undefined,
+        filter_exclude_keywords: settingsFilterExcludeKeywords || undefined,
+        filter_max_videos: settingsFilterMaxVideos ? Number(settingsFilterMaxVideos) : undefined,
+        download_threads: Math.max(1, settingsDownloadThreads),
+        youtube_content_type: isYoutubeChannelContentUrl(channel.url)
+          ? settingsYoutubeContentType
+          : 'videos',
       });
       setShowSettings(false);
     } catch (error) {
@@ -1302,13 +1451,14 @@ function ChannelDetailView({ channel, onBack }: { channel: FollowedChannel; onBa
       setSavingSettings(false);
     }
   }, [
-    channel.id,
+    channel,
     settingsCheckInterval,
     settingsAutoDownload,
     settingsDownloadQuality,
     settingsDownloadFormat,
     settingsDownloadVideoCodec,
     settingsDownloadAudioBitrate,
+    settingsYoutubeContentType,
     settingsIsAudioMode,
     settingsFilterMinDuration,
     settingsFilterMaxDuration,
@@ -1316,6 +1466,7 @@ function ChannelDetailView({ channel, onBack }: { channel: FollowedChannel; onBa
     settingsFilterExcludeKeywords,
     settingsFilterMaxVideos,
     settingsDownloadThreads,
+    setActiveChannel,
     updateChannelSettings,
   ]);
 
@@ -1395,11 +1546,11 @@ function ChannelDetailView({ channel, onBack }: { channel: FollowedChannel; onBa
 
   // Auto-fetch on mount, clear browse state on unmount (back navigation)
   useEffect(() => {
-    fetchChannelVideos(channel.url);
+    fetchChannelVideos(channel.url, undefined, channel.youtube_content_type || 'videos');
     return () => {
       clearBrowse();
     };
-  }, [channel.url, fetchChannelVideos, clearBrowse]);
+  }, [channel.url, channel.youtube_content_type, fetchChannelVideos, clearBrowse]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -1432,7 +1583,9 @@ function ChannelDetailView({ channel, onBack }: { channel: FollowedChannel; onBa
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => fetchChannelVideos(channel.url)}
+            onClick={() =>
+              fetchChannelVideos(channel.url, undefined, channel.youtube_content_type || 'videos')
+            }
             disabled={browseLoading}
           >
             {browseLoading ? (
@@ -1555,6 +1708,14 @@ function ChannelDetailView({ channel, onBack }: { channel: FollowedChannel; onBa
                     {t('audioMode')}
                   </button>
                 </div>
+
+                {isYoutubeChannelContentUrl(channel.url) && (
+                  <YoutubeContentTypeSelect
+                    value={settingsYoutubeContentType}
+                    onChange={setSettingsYoutubeContentType}
+                    disabled={savingSettings}
+                  />
+                )}
 
                 {/* Quality */}
                 {!settingsIsAudioMode && (

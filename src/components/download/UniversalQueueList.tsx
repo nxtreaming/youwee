@@ -1,6 +1,7 @@
-import { CheckCircle2, ExternalLink, Inbox } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Globe } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { EmptyStateIllustration } from '@/components/shared/EmptyStateIllustration';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,9 +45,12 @@ export function UniversalQueueList({
   const { t } = useTranslation('universal');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const completedCount = items.filter((i) => i.status === 'completed').length;
+  const clearableCount = items.filter(
+    (i) => i.status === 'completed' || i.status === 'skipped',
+  ).length;
   const pendingCount = items.filter((i) => i.status === 'pending').length;
   const totalCount = items.length;
-  const hasCompleted = completedCount > 0;
+  const hasCompleted = clearableCount > 0;
   const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   useEffect(() => {
@@ -60,9 +64,7 @@ export function UniversalQueueList({
   if (items.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-8 text-center">
-        <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-          <Inbox className="w-8 h-8 text-muted-foreground/50" />
-        </div>
+        <EmptyStateIllustration className="mb-5" icon={Globe} size="sm" />
         <h3 className="text-sm font-medium text-foreground mb-1">{t('queue.empty.title')}</h3>
         <p className="text-xs text-muted-foreground mb-4 max-w-[280px]">
           Supports <span className="font-semibold text-primary">1,800+</span> websites via yt-dlp
@@ -131,7 +133,7 @@ export function UniversalQueueList({
             disabled={isDownloading}
           >
             <CheckCircle2 className="w-3 h-3" />
-            {t('queue.clearCompleted', { count: completedCount })}
+            {t('queue.clearCompleted', { count: clearableCount })}
           </Button>
         )}
       </div>

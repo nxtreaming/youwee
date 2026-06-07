@@ -1,6 +1,7 @@
 import { CheckCircle2, Trash2, Youtube } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { EmptyStateIllustration } from '@/components/shared/EmptyStateIllustration';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -37,6 +38,9 @@ export function QueueList({
   const { t } = useTranslation('download');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const completedCount = items.filter((i) => i.status === 'completed').length;
+  const clearableCount = items.filter(
+    (i) => i.status === 'completed' || i.status === 'skipped',
+  ).length;
   const pendingCount = items.filter((i) => i.status === 'pending').length;
   const totalCount = items.length;
   const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
@@ -90,7 +94,7 @@ export function QueueList({
             </div>
           </div>
 
-          {completedCount > 0 && (
+          {clearableCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -108,9 +112,7 @@ export function QueueList({
       {/* Queue Items or Empty State */}
       {items.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-12 px-4">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-4">
-            <Youtube className="w-10 h-10 text-primary/50" />
-          </div>
+          <EmptyStateIllustration className="mb-5" icon={Youtube} />
           <h3 className="text-base font-medium mb-1">{t('queue.empty.title')}</h3>
           <p className="text-sm text-muted-foreground text-center max-w-[240px]">
             {t('queue.empty.description')}
