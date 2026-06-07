@@ -2,8 +2,8 @@ import { ScrollText, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LogEntry, LogToolbar } from '@/components/logs';
 import { ThemePicker } from '@/components/settings/ThemePicker';
+import { EmptyStateIllustration } from '@/components/shared/EmptyStateIllustration';
 import { useLogs } from '@/contexts/LogContext';
-import { cn } from '@/lib/utils';
 
 export function LogsPage() {
   const { t } = useTranslation('pages');
@@ -39,14 +39,7 @@ export function LogsPage() {
               </div>
             ) : logs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                <div
-                  className={cn(
-                    'w-16 h-16 rounded-2xl flex items-center justify-center mb-4',
-                    'bg-primary/10 text-primary',
-                  )}
-                >
-                  <ScrollText className="w-8 h-8" />
-                </div>
+                <EmptyStateIllustration className="mb-5" icon={ScrollText} />
                 <h3 className="text-lg font-semibold mb-2">{t('logs.emptyTitle')}</h3>
                 <p className="text-sm text-muted-foreground max-w-md">
                   {t('logs.emptyDescription')}

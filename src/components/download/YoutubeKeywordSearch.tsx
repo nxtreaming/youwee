@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { EmptyStateIllustration } from '@/components/shared/EmptyStateIllustration';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -718,22 +719,7 @@ export function YoutubeKeywordSearch({
           </div>
         ) : !hasResults ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-            <div className="relative mb-6 h-28 w-40">
-              <div className="absolute left-2 top-5 h-20 w-28 -rotate-6 rounded-2xl border border-border/60 bg-background/70 shadow-sm backdrop-blur-sm">
-                <div className="absolute left-4 top-4 h-2.5 w-14 rounded-full bg-muted-foreground/10" />
-                <div className="absolute left-4 top-9 h-2 w-20 rounded-full bg-muted-foreground/10" />
-                <div className="absolute bottom-3 left-4 h-2 w-10 rounded-full bg-muted-foreground/10" />
-              </div>
-              <div className="absolute right-2 top-2 h-20 w-32 rotate-3 rounded-2xl border border-primary/20 bg-primary/10 shadow-lg shadow-primary/10 backdrop-blur-sm">
-                <div className="absolute inset-x-3 top-3 aspect-video rounded-xl bg-background/70 shadow-inner" />
-                <div className="absolute right-4 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/25">
-                  <Search className="h-4 w-4" />
-                </div>
-                <div className="absolute bottom-4 left-4 h-2 w-16 rounded-full bg-primary/20" />
-                <div className="absolute bottom-8 left-4 h-2 w-10 rounded-full bg-primary/15" />
-              </div>
-              <div className="absolute bottom-1 left-1/2 h-3 w-24 -translate-x-1/2 rounded-full bg-primary/10 blur-md" />
-            </div>
+            <EmptyStateIllustration className="mb-6" icon={Search} />
             <h3 className="text-lg font-semibold text-foreground mb-1.5">
               {t('urlInput.keyword.emptyTitle')}
             </h3>
