@@ -716,7 +716,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       }
 
       const currentSettings = settingsRef.current;
-      let outputPath = currentSettings.outputPath;
+      let outputPath = options?.outputPath || currentSettings.outputPath;
       if (!outputPath) {
         outputPath = await resolveDefaultOutputPath();
         if (outputPath) {

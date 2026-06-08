@@ -9,6 +9,7 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Thêm mới
 - **Nguồn từ khóa YouTube trong Xuất dữ liệu** - Thêm nguồn từ khóa YouTube để export kết quả tìm kiếm từ Data Export
+- **Folder lưu từ CLI** - Thêm `--output` / `-o` để mỗi lượt tải được thêm từ CLI có thể dùng folder lưu tuyệt đối riêng
 
 ### Thay đổi
 - **Cài đặt và tài liệu CLI** - Tinh chỉnh card CLI trong General settings, bổ sung bản dịch CLI cho toàn bộ ngôn ngữ được hỗ trợ, và mở rộng hướng dẫn CLI với ghi chú cài đặt cho macOS, Windows và Linux
