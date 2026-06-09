@@ -114,6 +114,7 @@ export interface DownloadItem {
   speed: string;
   eta: string;
   error?: string;
+  errorCode?: string;
   isPlaylist?: boolean;
   isLive?: boolean; // true if video is currently live streaming
   downloadedSize?: string; // For live streams: "2.87 MiB"

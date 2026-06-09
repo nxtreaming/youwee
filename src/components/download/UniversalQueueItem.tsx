@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import { type ChangeEvent, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SchedulePopover } from '@/components/download/SchedulePopover';
 import { SimpleMarkdown } from '@/components/ui/simple-markdown';
 import { useAI } from '@/contexts/AIContext';
+import type { ScheduleConfig } from '@/hooks/useSchedule';
 import type { DownloadItem, ItemUniversalSettings } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { SourceBadge } from './SourceBadge';
@@ -102,6 +104,7 @@ interface UniversalQueueItemProps {
   onRemove: (id: string) => void;
   onUpdateTimeRange: (id: string, start?: string, end?: string) => void;
   onRename: (id: string, newName: string) => Promise<void>;
+  onScheduleUpcomingLive?: (config: ScheduleConfig) => void;
 }
 
 export function UniversalQueueItem({
@@ -111,6 +114,7 @@ export function UniversalQueueItem({
   onRemove,
   onUpdateTimeRange,
   onRename,
+  onScheduleUpcomingLive,
 }: UniversalQueueItemProps) {
   const { t } = useTranslation('universal');
   const ai = useAI();
@@ -148,6 +152,7 @@ export function UniversalQueueItem({
   const isSkipped = item.status === 'skipped';
   const retryState = item.retryState;
   const isFetchingMeta = isPending && !item.thumbnail && item.title === item.url && !item.extractor;
+  const isUpcomingLiveError = item.errorCode === 'YT_UPCOMING_LIVE';
 
   // Get saved settings for pending items
   const itemSettings = item.settings as ItemUniversalSettings | undefined;
@@ -489,7 +494,7 @@ export function UniversalQueueItem({
           {isError && (
             <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
               <Lightbulb className="w-3 h-3" />
-              {t('queue.status.failedHint')}
+              {isUpcomingLiveError ? t('queue.upcomingLive.hint') : t('queue.status.failedHint')}
             </span>
           )}
 
@@ -503,6 +508,18 @@ export function UniversalQueueItem({
             </span>
           )}
         </div>
+
+        {isUpcomingLiveError && onScheduleUpcomingLive && (
+          <div className="mt-1 flex items-center">
+            <SchedulePopover
+              onSchedule={onScheduleUpcomingLive}
+              ns="universal"
+              triggerVariant="inline"
+              triggerLabel={t('queue.upcomingLive.schedule')}
+              triggerClassName="border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+            />
+          </div>
+        )}
 
         {/* Actions Row — interactive buttons, visually distinct */}
         {!isActive && !isError && (

@@ -116,7 +116,11 @@
     "generating": "กำลังสร้าง...",
     "showMore": "แสดงเพิ่มเติม",
     "showLess": "แสดงน้อยลง",
-    "regenerateSummary": "สร้างสรุปใหม่"
+    "regenerateSummary": "สร้างสรุปใหม่",
+    "upcomingLive": {
+      "hint": "ตั้งเวลาคิวเพื่อลองอีกครั้งเมื่อไลฟ์เริ่ม",
+      "schedule": "ตั้งเวลา"
+    }
   },
   "actions": {
     "startDownload": "เริ่มดาวน์โหลด",

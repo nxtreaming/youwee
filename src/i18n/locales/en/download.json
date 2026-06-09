@@ -211,7 +211,11 @@
     "showMore": "Show more",
     "showLess": "Show less",
     "playlist": "Playlist",
-    "live": "LIVE"
+    "live": "LIVE",
+    "upcomingLive": {
+      "hint": "Schedule this queue to try again when the live starts.",
+      "schedule": "Schedule"
+    }
   },
   "actions": {
     "startDownload": "Start Download",

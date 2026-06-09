@@ -144,6 +144,7 @@ export function UniversalPage({ onNavigateToSettings }: UniversalPageProps) {
             onUpdateTimeRange={updateItemTimeRange}
             onRename={renameCompletedItem}
             onClearCompleted={clearCompleted}
+            onScheduleUpcomingLive={schedule.setSchedule}
           />
         </div>
       </div>

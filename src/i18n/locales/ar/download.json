@@ -209,7 +209,11 @@
     "showMore": "عرض المزيد",
     "showLess": "عرض أقل",
     "playlist": "قائمة تشغيل",
-    "live": "LIVE"
+    "live": "LIVE",
+    "upcomingLive": {
+      "hint": "حدّد موعدًا لقائمة الانتظار للمحاولة مجددًا عند بدء البث.",
+      "schedule": "جدولة"
+    }
   },
   "actions": {
     "startDownload": "بدء التنزيل",

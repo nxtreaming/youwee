@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Upcoming live scheduling** - Added an inline queue action to schedule another download attempt when a YouTube live event has not started yet
 - **Data Export YouTube keyword source** - Added a YouTube keyword source so search results can be exported from Data Export
 - **CLI output folder** - Added `--output` / `-o` so each CLI-queued download can use its own absolute output folder
 

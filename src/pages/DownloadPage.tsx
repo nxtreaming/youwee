@@ -204,6 +204,7 @@ export function DownloadPage({ onNavigateToSettings }: DownloadPageProps) {
               onUpdateTimeRange={updateItemTimeRange}
               onRename={renameCompletedItem}
               onClearCompleted={clearCompleted}
+              onScheduleUpcomingLive={schedule.setSchedule}
             />
           </div>
         </div>

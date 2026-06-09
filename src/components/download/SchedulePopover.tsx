@@ -11,6 +11,9 @@ interface SchedulePopoverProps {
   disabled?: boolean;
   /** translation namespace - 'download' or 'universal' */
   ns: string;
+  triggerVariant?: 'icon' | 'inline';
+  triggerLabel?: string;
+  triggerClassName?: string;
 }
 
 function getPresetTime(preset: 'in1h' | 'in3h' | 'tonight' | 'tomorrow'): Date {
@@ -50,7 +53,14 @@ function dateToTimeStr(date: Date): string {
   return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
 }
 
-export function SchedulePopover({ onSchedule, disabled, ns }: SchedulePopoverProps) {
+export function SchedulePopover({
+  onSchedule,
+  disabled,
+  ns,
+  triggerVariant = 'icon',
+  triggerLabel,
+  triggerClassName,
+}: SchedulePopoverProps) {
   const { t } = useTranslation(ns);
   const [open, setOpen] = useState(false);
   const [startTime, setStartTime] = useState('');
@@ -85,12 +95,18 @@ export function SchedulePopover({ onSchedule, disabled, ns }: SchedulePopoverPro
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          size="icon"
+          size={triggerVariant === 'inline' ? 'sm' : 'icon'}
           disabled={disabled}
-          className="h-11 w-11 rounded-xl flex-shrink-0 bg-transparent border-border/50 hover:bg-white/10"
+          className={cn(
+            triggerVariant === 'inline'
+              ? 'h-7 gap-1.5 rounded-md border-dashed px-2 text-[11px] font-medium'
+              : 'h-11 w-11 rounded-xl flex-shrink-0 bg-transparent border-border/50 hover:bg-white/10',
+            triggerClassName,
+          )}
           title={t('schedule.title')}
         >
-          <Clock className="w-5 h-5" />
+          <Clock className={triggerVariant === 'inline' ? 'h-3 w-3' : 'h-5 w-5'} />
+          {triggerVariant === 'inline' && <span>{triggerLabel ?? t('schedule.setSchedule')}</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent side="top" align="center" className="w-72 p-3">

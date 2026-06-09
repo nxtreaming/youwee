@@ -211,7 +211,11 @@
     "showMore": "展开",
     "showLess": "收起",
     "playlist": "播放列表",
-    "live": "直播"
+    "live": "直播",
+    "upcomingLive": {
+      "hint": "为队列设置定时，在直播开始后重试。",
+      "schedule": "定时"
+    }
   },
   "actions": {
     "startDownload": "开始下载",

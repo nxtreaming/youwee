@@ -118,7 +118,11 @@
     "generating": "生成中...",
     "showMore": "展开",
     "showLess": "收起",
-    "regenerateSummary": "重新生成摘要"
+    "regenerateSummary": "重新生成摘要",
+    "upcomingLive": {
+      "hint": "为队列设置定时，在直播开始后重试。",
+      "schedule": "定时"
+    }
   },
   "actions": {
     "startDownload": "开始下载",

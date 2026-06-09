@@ -209,7 +209,11 @@
     "renamePlaceholder": "Entrez le nouveau nom du fichier",
     "renameSave": "Enregistrer",
     "renameCancel": "Annuler",
-    "renameFailed": "Échec du renommage du fichier"
+    "renameFailed": "Échec du renommage du fichier",
+    "upcomingLive": {
+      "hint": "Planifiez la file pour réessayer quand le live démarre.",
+      "schedule": "Planifier"
+    }
   },
   "actions": {
     "startDownload": "Démarrer le téléchargement",

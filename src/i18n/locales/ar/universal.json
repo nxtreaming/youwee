@@ -116,7 +116,11 @@
     "generating": "جارٍ الإنشاء...",
     "showMore": "عرض المزيد",
     "showLess": "عرض أقل",
-    "regenerateSummary": "إعادة إنشاء الملخص"
+    "regenerateSummary": "إعادة إنشاء الملخص",
+    "upcomingLive": {
+      "hint": "حدّد موعدًا لقائمة الانتظار للمحاولة مجددًا عند بدء البث.",
+      "schedule": "جدولة"
+    }
   },
   "actions": {
     "startDownload": "بدء التنزيل",

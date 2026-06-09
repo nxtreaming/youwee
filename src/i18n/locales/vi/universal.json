@@ -118,7 +118,11 @@
     "generating": "Đang tạo...",
     "showMore": "Xem thêm",
     "showLess": "Thu gọn",
-    "regenerateSummary": "Tạo lại tóm tắt"
+    "regenerateSummary": "Tạo lại tóm tắt",
+    "upcomingLive": {
+      "hint": "Lên lịch hàng đợi để thử lại khi live bắt đầu.",
+      "schedule": "Lên lịch"
+    }
   },
   "actions": {
     "startDownload": "Bắt đầu tải",

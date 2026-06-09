@@ -211,7 +211,11 @@
     "showMore": "Xem thêm",
     "showLess": "Thu gọn",
     "playlist": "Playlist",
-    "live": "LIVE"
+    "live": "LIVE",
+    "upcomingLive": {
+      "hint": "Lên lịch hàng đợi để thử lại khi live bắt đầu.",
+      "schedule": "Lên lịch"
+    }
   },
   "actions": {
     "startDownload": "Bắt đầu tải",
