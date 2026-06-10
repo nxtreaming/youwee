@@ -120,7 +120,7 @@
     "showLess": "收起",
     "regenerateSummary": "重新生成摘要",
     "upcomingLive": {
-      "hint": "为队列设置定时，在直播开始后重试。",
+      "hint": "直播尚未开始",
       "schedule": "定时"
     }
   },

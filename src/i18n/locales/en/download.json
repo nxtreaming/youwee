@@ -213,7 +213,7 @@
     "playlist": "Playlist",
     "live": "LIVE",
     "upcomingLive": {
-      "hint": "Schedule this queue to try again when the live starts.",
+      "hint": "Live has not started yet",
       "schedule": "Schedule"
     }
   },

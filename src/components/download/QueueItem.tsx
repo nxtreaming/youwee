@@ -500,6 +500,16 @@ export function QueueItem({
             </span>
           )}
 
+          {isUpcomingLiveError && onScheduleUpcomingLive && (
+            <SchedulePopover
+              onSchedule={onScheduleUpcomingLive}
+              ns="download"
+              triggerVariant="inline"
+              triggerLabel={t('queue.upcomingLive.schedule')}
+              triggerClassName="border-muted-foreground/30 bg-transparent text-muted-foreground hover:border-muted-foreground/50 hover:bg-muted/50 hover:text-foreground"
+            />
+          )}
+
           {/* Generating Status (inline with info badges) */}
           {isGenerating && (
             <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-medium">
@@ -510,18 +520,6 @@ export function QueueItem({
             </span>
           )}
         </div>
-
-        {isUpcomingLiveError && onScheduleUpcomingLive && (
-          <div className="mt-1 flex items-center">
-            <SchedulePopover
-              onSchedule={onScheduleUpcomingLive}
-              ns="download"
-              triggerVariant="inline"
-              triggerLabel={t('queue.upcomingLive.schedule')}
-              triggerClassName="border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
-            />
-          </div>
-        )}
 
         {/* Actions Row — interactive buttons, visually distinct */}
         {!isActive && !isError && (

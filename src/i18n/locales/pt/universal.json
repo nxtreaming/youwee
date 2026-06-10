@@ -118,7 +118,7 @@
     "renameCancel": "Cancelar",
     "renameFailed": "Falha ao renomear o arquivo",
     "upcomingLive": {
-      "hint": "Agende a fila para tentar novamente quando a live começar.",
+      "hint": "Live ainda não começou",
       "schedule": "Agendar"
     }
   },

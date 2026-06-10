@@ -213,7 +213,7 @@
     "playlist": "播放列表",
     "live": "直播",
     "upcomingLive": {
-      "hint": "为队列设置定时，在直播开始后重试。",
+      "hint": "直播尚未开始",
       "schedule": "定时"
     }
   },

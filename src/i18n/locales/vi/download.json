@@ -213,7 +213,7 @@
     "playlist": "Playlist",
     "live": "LIVE",
     "upcomingLive": {
-      "hint": "Lên lịch hàng đợi để thử lại khi live bắt đầu.",
+      "hint": "Live chưa bắt đầu",
       "schedule": "Lên lịch"
     }
   },

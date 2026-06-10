@@ -211,7 +211,7 @@
     "renameCancel": "Annuler",
     "renameFailed": "Échec du renommage du fichier",
     "upcomingLive": {
-      "hint": "Planifiez la file pour réessayer quand le live démarre.",
+      "hint": "Live pas encore commencé",
       "schedule": "Planifier"
     }
   },
