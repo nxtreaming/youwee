@@ -5,6 +5,7 @@ import { EmptyStateIllustration } from '@/components/shared/EmptyStateIllustrati
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { ScheduleConfig } from '@/hooks/useSchedule';
 import type { DownloadItem } from '@/lib/types';
 import { QueueItem } from './QueueItem';
 import {
@@ -29,6 +30,7 @@ interface QueueListProps {
   onUpdateTimeRange: (id: string, start?: string, end?: string) => void;
   onRename: (id: string, newName: string) => Promise<void>;
   onClearCompleted: () => void;
+  onScheduleUpcomingLive?: (config: ScheduleConfig) => void;
 }
 
 export function QueueList({
@@ -41,6 +43,7 @@ export function QueueList({
   onUpdateTimeRange,
   onRename,
   onClearCompleted,
+  onScheduleUpcomingLive,
 }: QueueListProps) {
   const { t } = useTranslation('download');
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -143,6 +146,7 @@ export function QueueList({
                   onRemove={onRemove}
                   onUpdateTimeRange={onUpdateTimeRange}
                   onRename={onRename}
+                  onScheduleUpcomingLive={onScheduleUpcomingLive}
                 />
               ))}
             </div>

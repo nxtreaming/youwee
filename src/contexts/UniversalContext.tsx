@@ -393,6 +393,7 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
                   progress.error_message,
                   progress.error_params,
                 ),
+                errorCode: progress.status === 'error' ? progress.error_code : undefined,
                 retryState: undefined,
                 downloadedSize: progress.downloaded_size,
                 elapsedTime: progress.elapsed_time,
@@ -851,7 +852,13 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
         setItems((items) =>
           items.map((i) =>
             i.id === item.id
-              ? { ...i, status: 'downloading', error: undefined, retryState: undefined }
+              ? {
+                  ...i,
+                  status: 'downloading',
+                  error: undefined,
+                  errorCode: undefined,
+                  retryState: undefined,
+                }
               : i,
           ),
         );
@@ -930,6 +937,7 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
                       status: 'skipped',
                       progress: 0,
                       error: errorMessage,
+                      errorCode: parsedError.code,
                       retryState: undefined,
                     }
                   : i,
@@ -949,7 +957,13 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
             setItems((items) =>
               items.map((i) =>
                 i.id === item.id
-                  ? { ...i, status: 'error', error: errorMessage, retryState: undefined }
+                  ? {
+                      ...i,
+                      status: 'error',
+                      error: errorMessage,
+                      errorCode: parsedError.code,
+                      retryState: undefined,
+                    }
                   : i,
               ),
             );
@@ -964,6 +978,7 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
                     ...i,
                     status: 'pending',
                     error: errorMessage,
+                    errorCode: parsedError.code,
                     retryState: {
                       retryIndex,
                       maxRetries,
@@ -1153,7 +1168,14 @@ export function UniversalProvider({ children }: { children: ReactNode }) {
       setItems((currentItems) =>
         currentItems.map((item) =>
           item.id === itemId
-            ? { ...item, status: 'pending', progress: 0, error: undefined, retryState: undefined }
+            ? {
+                ...item,
+                status: 'pending',
+                progress: 0,
+                error: undefined,
+                errorCode: undefined,
+                retryState: undefined,
+              }
             : item,
         ),
       );

@@ -209,7 +209,11 @@
     "renamePlaceholder": "Введите новое имя файла",
     "renameSave": "Сохранить",
     "renameCancel": "Отмена",
-    "renameFailed": "Не удалось переименовать файл"
+    "renameFailed": "Не удалось переименовать файл",
+    "upcomingLive": {
+      "hint": "Трансляция еще не началась",
+      "schedule": "Запланировать"
+    }
   },
   "actions": {
     "startDownload": "Начать загрузку",
@@ -227,7 +231,17 @@
     "addStopTime": "+ Добавить время остановки",
     "setSchedule": "Установить расписание",
     "cancel": "Отменить расписание",
-    "startNow": "Начать сейчас"
+    "startNow": "Начать сейчас",
+    "preset_in15m": "Через 15 мин",
+    "preset_in30m": "Через 30 мин",
+    "subtitle": "Автоматически запускает очередь в выбранное время.",
+    "quickPresets": "Быстрый выбор",
+    "removeStopTime": "Убрать",
+    "today": "Сегодня",
+    "tomorrow": "Завтра",
+    "preview": "Предпросмотр:",
+    "previewStart": "старт {{time}}",
+    "previewStop": "стоп {{time}}"
   },
   "languages": {
     "en": "Английский",

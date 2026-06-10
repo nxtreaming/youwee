@@ -8,13 +8,17 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Thêm mới
+- **Lên lịch cho live sắp bắt đầu** - Thêm action trực tiếp trên item trong hàng đợi để lên lịch thử tải lại khi live YouTube chưa bắt đầu
 - **Nguồn từ khóa YouTube trong Xuất dữ liệu** - Thêm nguồn từ khóa YouTube để export kết quả tìm kiếm từ Data Export
 - **Folder lưu từ CLI** - Thêm `--output` / `-o` để mỗi lượt tải được thêm từ CLI có thể dùng folder lưu tuyệt đối riêng
 
 ### Thay đổi
+- **Điều khiển lên lịch** - Tinh chỉnh popover lên lịch và trạng thái lịch đang chạy với preset nhanh hơn, preview rõ hơn và countdown gọn hơn
 - **Cài đặt và tài liệu CLI** - Tinh chỉnh card CLI trong General settings, bổ sung bản dịch CLI cho toàn bộ ngôn ngữ được hỗ trợ, và mở rộng hướng dẫn CLI với ghi chú cài đặt cho macOS, Windows và Linux
 
 ### Sửa lỗi
+- **Phiên bản yt-dlp bundled** - Ưu tiên sidecar đi kèm bản app hiện tại để binary app-managed cũ không che bản bundled mới hơn
+- **Nguồn yt-dlp trong Channel** - Sửa luồng duyệt Channel để dùng đúng nguồn/channel yt-dlp đã chọn, gồm Stable và System
 - **URL paste bị escape** - Chuẩn hóa dấu câu URL bị shell escape trong ô nhập Download, Universal và Gallery để link dạng `watch\?v\=...` vẫn thêm đúng video vào hàng đợi
 - **URL CLI bị escape** - Chuẩn hóa dấu câu URL bị shell escape để URL YouTube có dạng `watch\?v\=...` vẫn tải đúng video mong muốn
 - **Lỗi live đã lên lịch** - Hiển thị thông báo rõ ràng cho live YouTube sắp diễn ra thay vì gộp vào lỗi skipped hoặc unspecified chung chung

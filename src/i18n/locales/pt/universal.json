@@ -116,7 +116,11 @@
     "renamePlaceholder": "Digite o novo nome do arquivo",
     "renameSave": "Salvar",
     "renameCancel": "Cancelar",
-    "renameFailed": "Falha ao renomear o arquivo"
+    "renameFailed": "Falha ao renomear o arquivo",
+    "upcomingLive": {
+      "hint": "Live ainda não começou",
+      "schedule": "Agendar"
+    }
   },
   "actions": {
     "startDownload": "Iniciar Download",
@@ -134,6 +138,16 @@
     "addStopTime": "+ Adicionar tempo de parada",
     "setSchedule": "Definir Agenda",
     "cancel": "Cancelar agenda",
-    "startNow": "Iniciar Agora"
+    "startNow": "Iniciar Agora",
+    "preset_in15m": "Em 15 min",
+    "preset_in30m": "Em 30 min",
+    "subtitle": "Inicia a fila automaticamente no horário escolhido.",
+    "quickPresets": "Atalhos",
+    "removeStopTime": "Remover",
+    "today": "Hoje",
+    "tomorrow": "Amanhã",
+    "preview": "Prévia:",
+    "previewStart": "inicia {{time}}",
+    "previewStop": "para {{time}}"
   }
 }
