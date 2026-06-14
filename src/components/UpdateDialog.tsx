@@ -88,7 +88,7 @@ export function UpdateDialog({
             <div className="absolute inset-0 bg-primary/40 blur-xl rounded-full" />
             <div
               className={cn(
-                'relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl shadow-lg border border-white/10 text-white transform transition-transform hover:scale-105 duration-500',
+                'relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl shadow-lg border border-white/10 text-white transform transition-transform duration-500',
                 status === 'error'
                   ? 'bg-gradient-to-br from-red-500 to-red-600'
                   : status === 'ready'

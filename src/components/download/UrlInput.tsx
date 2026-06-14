@@ -7,6 +7,7 @@ import {
   List,
   Loader2,
   Plus,
+  Search,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -289,13 +290,14 @@ export function UrlInput({
             onClick={onOpenKeywordSearch}
             disabled={disabled}
             className={cn(
-              'inline-flex h-9 items-center rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition-colors',
-              'hover:bg-primary/90',
+              'inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-primary/20 bg-primary/10 px-3 text-xs font-medium text-primary shadow-sm shadow-primary/5 transition-colors',
+              'hover:border-primary/30 hover:bg-primary/15',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary',
+              'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary/10',
             )}
             title={t('urlInput.keyword.hint')}
           >
+            <Search className="h-3.5 w-3.5" />
             <span>{t('urlInput.keyword.openButton')}</span>
           </button>
         </div>

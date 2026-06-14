@@ -756,7 +756,7 @@ export function ChatPanel({
                 'relative flex-shrink-0 h-10 w-10 rounded-xl flex items-center justify-center',
                 'transition-all duration-300 ease-out',
                 inputMessage.trim() && hasVideo && !isProcessing && !isGenerating
-                  ? 'btn-gradient shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:scale-105'
+                  ? 'btn-gradient shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30'
                   : 'bg-muted/50 text-muted-foreground/30 hover:bg-muted/70 hover:text-muted-foreground/50',
               )}
               onClick={handleSendMessage}
