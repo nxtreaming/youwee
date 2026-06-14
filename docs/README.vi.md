@@ -77,7 +77,7 @@
 
 ## Video Demo
 
-▶️ [Xem trên YouTube](https://www.youtube.com/watch?v=H7TtVZWxilU)
+▶️ [Xem trên YouTube](https://youtu.be/7eaKOsFAP1s)
 
 ## Lưu ý pháp lý
 

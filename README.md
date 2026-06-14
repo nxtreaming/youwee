@@ -81,7 +81,7 @@
 
 ## Demo Video
 
-▶️ [Watch on YouTube](https://www.youtube.com/watch?v=H7TtVZWxilU)
+▶️ [Watch on YouTube](https://youtu.be/7eaKOsFAP1s)
 
 ## Legal Notice
 

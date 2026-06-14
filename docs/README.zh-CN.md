@@ -77,7 +77,7 @@
 
 ## 演示视频
 
-▶️ [在 YouTube 观看](https://www.youtube.com/watch?v=H7TtVZWxilU)
+▶️ [在 YouTube 观看](https://youtu.be/7eaKOsFAP1s)
 
 ## 法律提示
 
