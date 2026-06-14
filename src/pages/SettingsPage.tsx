@@ -529,7 +529,7 @@ function AboutSettingsContent({
                 target="_blank"
                 rel="noopener noreferrer"
                 className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-background/60 text-xs font-medium transition-all hover:shadow-sm hover:scale-105',
+                  'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-background/60 text-xs font-medium transition-all hover:shadow-sm',
                   item.color,
                   item.hoverBg,
                 )}
@@ -542,7 +542,7 @@ function AboutSettingsContent({
               type="button"
               onClick={handleCopyLink}
               className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-background/60 hover:bg-background text-xs font-medium transition-all hover:shadow-sm hover:scale-105',
+                'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-background/60 hover:bg-background text-xs font-medium transition-all hover:shadow-sm',
                 copied && 'text-emerald-500',
               )}
             >

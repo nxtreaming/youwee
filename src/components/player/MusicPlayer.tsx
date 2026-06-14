@@ -375,7 +375,7 @@ export function MusicPlayer() {
                   'inline-flex h-11 w-11 items-center justify-center rounded-full transition-all duration-300',
                   isPlaying
                     ? 'bg-primary/15 text-primary hover:bg-primary/25'
-                    : 'bg-primary text-primary-foreground shadow-md hover:scale-105 active:scale-95 hover:shadow-lg hover:shadow-primary/20',
+                    : 'bg-primary text-primary-foreground shadow-md active:scale-95 hover:shadow-lg hover:shadow-primary/20',
                 )}
                 title={isPlaying ? t('player.pause') : t('player.play')}
               >
@@ -558,7 +558,7 @@ export function MusicPlayer() {
             onPointerMove={handleMiniPlayerPointerMove}
             onPointerUp={handleMiniPlayerPointerEnd}
             onPointerCancel={handleMiniPlayerPointerEnd}
-            className="group pointer-events-auto relative flex h-14 w-14 touch-none select-none items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.2)] transition-transform hover:scale-105 active:scale-95 dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)]"
+            className="group pointer-events-auto relative flex h-14 w-14 touch-none select-none items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.2)] transition-transform active:scale-95 dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)]"
             title={currentEntry.title}
           >
             {currentEntry.thumbnail && !thumbError ? (
