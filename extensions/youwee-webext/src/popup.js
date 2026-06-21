@@ -8,6 +8,7 @@
   let activeTabId = null;
   const manifestVersion = api?.runtime?.getManifest?.()?.version || '0.0.0';
   let floatingPrefs = { enabled: true, collapsedByHost: {} };
+  let floatingPrefsChangedInPopup = false;
 
   const titleEl = document.getElementById('title');
   const versionLinkEl = document.getElementById('versionLink');
@@ -32,7 +33,7 @@
 
   const ACTION_ICONS = {
     download:
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>',
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
     queue:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h10"></path><path d="M4 12h10"></path><path d="M4 17h7"></path><path d="M18 10v8"></path><path d="M14 14h8"></path></svg>',
     summary:
@@ -248,12 +249,12 @@
     floatingToggleBtn.setAttribute('aria-label', t('popupFloatingLabel', 'Floating button'));
   }
 
-  async function loadFloatingPrefs() {
+  async function readFloatingPrefs() {
     try {
       const result = await storageGet(STORAGE_KEY);
-      floatingPrefs = normalizeFloatingPrefs(result?.[STORAGE_KEY]);
+      return normalizeFloatingPrefs(result?.[STORAGE_KEY]);
     } catch {
-      floatingPrefs = normalizeFloatingPrefs(null);
+      return normalizeFloatingPrefs(null);
     }
   }
 
@@ -262,6 +263,7 @@
   }
 
   async function handleFloatingToggle() {
+    floatingPrefsChangedInPopup = true;
     floatingPrefs.enabled = !isFloatingEnabled();
     updateFloatingToggleUi();
 
@@ -289,6 +291,7 @@
   function handleStorageChanged(changes, areaName) {
     if (areaName !== 'local') return;
     if (!changes || !changes[STORAGE_KEY]) return;
+    floatingPrefsChangedInPopup = false;
     floatingPrefs = normalizeFloatingPrefs(changes[STORAGE_KEY].newValue);
     updateFloatingToggleUi();
   }
@@ -496,24 +499,7 @@
     }
   }
 
-  async function init() {
-    await loadFloatingPrefs();
-    updateTexts();
-    setMediaValue('video');
-    versionLinkEl.href = ext.RELEASE_URL;
-
-    try {
-      const tabs = await queryTabs({ active: true, currentWindow: true });
-      const activeTab = Array.isArray(tabs) ? tabs[0] : null;
-      activeTabId = Number.isInteger(activeTab?.id) ? activeTab.id : null;
-      updateUrlState(activeTab?.url || '');
-      if (isFloatingEnabled()) {
-        void ensureFloatingContentScript();
-      }
-    } catch {
-      updateUrlState('');
-    }
-
+  function attachEventListeners() {
     downloadBtn.addEventListener('click', () => {
       void handleDownloadClick('download_now');
     });
@@ -535,6 +521,39 @@
     if (api?.storage?.onChanged?.addListener) {
       api.storage.onChanged.addListener(handleStorageChanged);
     }
+  }
+
+  async function hydratePopupState() {
+    const storedFloatingPrefs = await readFloatingPrefs();
+    if (!floatingPrefsChangedInPopup) {
+      floatingPrefs = storedFloatingPrefs;
+      updateFloatingToggleUi();
+    }
+
+    try {
+      const tabs = await queryTabs({ active: true, currentWindow: true });
+      const activeTab = Array.isArray(tabs) ? tabs[0] : null;
+      activeTabId = Number.isInteger(activeTab?.id) ? activeTab.id : null;
+      updateUrlState(activeTab?.url || '');
+      if (isFloatingEnabled()) {
+        window.setTimeout(() => {
+          void ensureFloatingContentScript();
+        }, 150);
+      }
+    } catch {
+      updateUrlState('');
+    }
+  }
+
+  function init() {
+    updateTexts();
+    setMediaValue('video');
+    versionLinkEl.href = ext.RELEASE_URL;
+    attachEventListeners();
+
+    window.setTimeout(() => {
+      void hydratePopupState();
+    }, 0);
   }
 
   void init();

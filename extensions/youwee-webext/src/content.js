@@ -28,7 +28,7 @@
 
   const ACTION_ICONS = {
     download:
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>',
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
     queue:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h10"></path><path d="M4 12h10"></path><path d="M4 17h7"></path><path d="M18 10v8"></path><path d="M14 14h8"></path></svg>',
     summary:
@@ -320,8 +320,24 @@
     setPanelOpen(false);
   }
 
+  function getRuntimeAssetUrl(path) {
+    try {
+      return ext.getExtensionApi()?.runtime?.getURL?.(path) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function createLogoMarkup(logoUrl) {
+    if (logoUrl) {
+      return `<img class="youwee-floating__logo-img" src="${logoUrl}" alt="Youwee" />`;
+    }
+
+    return '<span class="youwee-floating__logo-fallback" aria-hidden="true">Y</span>';
+  }
+
   function buildWidget() {
-    const logoUrl = api?.runtime?.getURL?.('icons/logo-64.png') || '';
+    const logoMarkup = createLogoMarkup(getRuntimeAssetUrl('icons/logo-64.png'));
     const canSummarize = ext.isYouTubeUrl(location.href);
 
     const container = document.createElement('div');
@@ -334,7 +350,7 @@
     tab.type = 'button';
     tab.className = 'youwee-floating__tab';
     tab.title = ext.t('floatingExpand', 'Expand');
-    tab.innerHTML = `<img class="youwee-floating__logo-img" src="${logoUrl}" alt="Youwee" />`;
+    tab.innerHTML = logoMarkup;
     tab.addEventListener('click', (event) => {
       if (!isTrustedUserEvent(event)) return;
       setCollapsedState(false);
@@ -346,7 +362,7 @@
     launch.title = ext.t('floatingLauncher', 'Youwee');
     launch.innerHTML = `
       <span class="youwee-floating__logo">
-        <img class="youwee-floating__logo-img" src="${logoUrl}" alt="Youwee" />
+        ${logoMarkup}
       </span>
       <span class="youwee-floating__text">${ext.t('floatingLauncher', 'Youwee')}</span>
       <span class="youwee-floating__chevron">▾</span>
