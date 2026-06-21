@@ -55,6 +55,8 @@ pub struct AIConfig {
     pub summary_language: String,
     pub timeout_seconds: Option<u64>,
     #[serde(default)]
+    pub summary_max_tokens: Option<u32>,
+    #[serde(default)]
     pub transcript_languages: Option<Vec<String>>,
     #[serde(default)]
     pub whisper_enabled: bool,
@@ -79,6 +81,7 @@ impl Default for AIConfig {
             summary_style: SummaryStyle::Short,
             summary_language: "auto".to_string(),
             timeout_seconds: Some(120),
+            summary_max_tokens: None,
             transcript_languages: Some(vec!["en".to_string()]),
             whisper_enabled: false,
             whisper_api_key: None,

@@ -32,6 +32,39 @@ fn default_transcript_languages(url: &str) -> Vec<String> {
     vec!["en".to_string()]
 }
 
+fn parse_basic_video_info_output(
+    output: &str,
+) -> Result<(String, Option<String>, Option<f64>), String> {
+    let line = output
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .ok_or_else(|| "Failed to fetch video information".to_string())?;
+
+    let mut parts = line.splitn(3, "|||");
+    let title = parts.next().unwrap_or("").trim();
+    let thumbnail = parts.next().unwrap_or("").trim();
+    let duration = parts.next().unwrap_or("").trim();
+
+    if title.is_empty() || title == "NA" {
+        return Err("Failed to fetch video title".to_string());
+    }
+
+    let thumbnail = if thumbnail.is_empty() || thumbnail == "NA" {
+        None
+    } else {
+        Some(thumbnail.to_string())
+    };
+
+    let duration = if duration.is_empty() || duration == "NA" {
+        None
+    } else {
+        duration.parse::<f64>().ok()
+    };
+
+    Ok((title.to_string(), thumbnail, duration))
+}
+
 /// Get video transcript/subtitles for AI summarization
 #[tauri::command]
 pub async fn get_video_transcript(
@@ -121,6 +154,7 @@ pub async fn get_video_transcript(
         let mut subtitle_args: Vec<String> = vec![
             "--skip-download".to_string(),
             "--no-playlist".to_string(),
+            "--ignore-no-formats-error".to_string(),
             "--write-auto-subs".to_string(),
             "--write-subs".to_string(),
             "--sub-langs".to_string(),
@@ -317,6 +351,7 @@ pub async fn get_video_transcript(
     let info_args = vec![
         "--skip-download",
         "--no-playlist", // Important: only get single video, not playlist
+        "--ignore-no-formats-error",
         "--print",
         "%(title)s|||%(description)s",
         "--no-warnings",
@@ -755,6 +790,122 @@ fn parse_subtitle_file(content: &str) -> String {
 }
 
 #[tauri::command]
+pub async fn get_video_basic_info(
+    app: AppHandle,
+    url: String,
+    cookie_mode: Option<String>,
+    cookie_browser: Option<String>,
+    cookie_browser_profile: Option<String>,
+    cookie_file_path: Option<String>,
+    proxy_url: Option<String>,
+) -> Result<VideoInfoResponse, String> {
+    validate_url(&url).map_err(|e| BackendError::from_message(e).to_wire_string())?;
+    let url = normalize_url(&url);
+
+    let mut args = vec![
+        "--skip-download".to_string(),
+        "--no-warnings".to_string(),
+        "--no-simulate".to_string(),
+        "--no-playlist".to_string(),
+        "--ignore-no-formats-error".to_string(),
+        "--socket-timeout".to_string(),
+        "15".to_string(),
+    ];
+
+    if url.contains("youtube.com") || url.contains("youtu.be") {
+        if let Some(deno_path) = get_deno_path(&app).await {
+            args.push("--js-runtimes".to_string());
+            args.push(format!("deno:{}", deno_path.to_string_lossy()));
+        }
+    }
+
+    args.push("--print".to_string());
+    args.push("%(title)s|||%(thumbnail)s|||%(duration)s".to_string());
+    args.push("--".to_string());
+    args.push(url.clone());
+
+    let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let command_str = format!("yt-dlp {}", args.join(" "));
+    add_log_internal("command", &command_str, None, Some(&url)).ok();
+
+    let output = match timeout(
+        Duration::from_secs(45),
+        run_ytdlp_with_stderr_and_cookies(
+            &app,
+            &args_ref,
+            cookie_mode.as_deref(),
+            cookie_browser.as_deref(),
+            cookie_browser_profile.as_deref(),
+            cookie_file_path.as_deref(),
+            proxy_url.as_deref(),
+        ),
+    )
+    .await
+    {
+        Ok(result) => result?,
+        Err(_) => {
+            let error = BackendError::from_message(
+                "Timed out fetching video info. Please try again or check your cookie/proxy settings.",
+            );
+            add_log_internal("error", error.message(), None, Some(&url)).ok();
+            return Err(error.to_wire_string());
+        }
+    };
+
+    if !output.stderr.trim().is_empty() {
+        add_log_internal("stderr", output.stderr.trim(), None, Some(&url)).ok();
+    }
+
+    if !output.success {
+        let parsed_error = parse_ytdlp_error(&output.stderr).unwrap_or_else(|| {
+            let stderr = output.stderr.trim();
+            if stderr.is_empty() {
+                BackendError::from_message("Failed to fetch video info.")
+            } else {
+                BackendError::from_message(format!("Failed to fetch video info: {}", stderr))
+            }
+        });
+        add_log_internal("error", parsed_error.message(), None, Some(&url)).ok();
+        return Err(parsed_error.to_wire_string());
+    }
+
+    let (title, thumbnail, duration) = parse_basic_video_info_output(&output.stdout)
+        .map_err(|e| BackendError::from_message(e).to_wire_string())?;
+
+    let info = VideoInfo {
+        id: String::new(),
+        title,
+        thumbnail,
+        duration,
+        channel: None,
+        uploader: None,
+        upload_date: None,
+        view_count: None,
+        description: None,
+        is_playlist: false,
+        playlist_count: None,
+        extractor: None,
+        extractor_key: None,
+        is_live: None,
+        was_live: None,
+        live_status: None,
+    };
+
+    add_log_internal(
+        "info",
+        &format!("Fetched basic video info - title: '{}'", info.title),
+        None,
+        Some(&url),
+    )
+    .ok();
+
+    Ok(VideoInfoResponse {
+        info,
+        formats: Vec::new(),
+    })
+}
+
+#[tauri::command]
 pub async fn get_video_info(
     app: AppHandle,
     url: String,
@@ -771,6 +922,7 @@ pub async fn get_video_info(
         "--dump-json".to_string(),
         "--no-download".to_string(),
         "--no-playlist".to_string(),
+        "--ignore-no-formats-error".to_string(),
         "--no-warnings".to_string(),
         "--socket-timeout".to_string(),
         "15".to_string(),
@@ -804,7 +956,21 @@ pub async fn get_video_info(
     add_log_internal("command", &command_str, None, Some(&url)).ok();
 
     let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let output = run_ytdlp_with_stderr(&app, &args_ref).await?;
+    let output = match timeout(
+        Duration::from_secs(45),
+        run_ytdlp_with_stderr(&app, &args_ref),
+    )
+    .await
+    {
+        Ok(result) => result?,
+        Err(_) => {
+            let error = BackendError::from_message(
+                "Timed out fetching video info. Please try again or check your cookie/proxy settings.",
+            );
+            add_log_internal("error", error.message(), None, Some(&url)).ok();
+            return Err(error.to_wire_string());
+        }
+    };
 
     if !output.stderr.trim().is_empty() {
         add_log_internal("stderr", output.stderr.trim(), None, Some(&url)).ok();
@@ -1240,4 +1406,39 @@ pub async fn get_available_subtitles(
     }
 
     Ok(subtitles)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_basic_video_info_output_reads_printed_fields() {
+        let output = concat!(
+            "Кто попадет в команду ChatGPT: учёный или программист? (Ответ тебя удивит)",
+            "|||https://i.ytimg.com/vi/ePPilLkDn0s/maxresdefault.jpg|||3623\n"
+        );
+
+        let (title, thumbnail, duration) = parse_basic_video_info_output(output).unwrap();
+
+        assert_eq!(
+            title,
+            "Кто попадет в команду ChatGPT: учёный или программист? (Ответ тебя удивит)"
+        );
+        assert_eq!(
+            thumbnail.as_deref(),
+            Some("https://i.ytimg.com/vi/ePPilLkDn0s/maxresdefault.jpg")
+        );
+        assert_eq!(duration, Some(3623.0));
+    }
+
+    #[test]
+    fn parse_basic_video_info_output_ignores_missing_optional_fields() {
+        let (title, thumbnail, duration) =
+            parse_basic_video_info_output("Video title|||NA|||NA").unwrap();
+
+        assert_eq!(title, "Video title");
+        assert_eq!(thumbnail, None);
+        assert_eq!(duration, None);
+    }
 }

@@ -66,6 +66,24 @@ export function AISection({ highlightId }: AISectionProps) {
   const ai = useAI();
   const [showApiKey, setShowApiKey] = useState(false);
   const [showWhisperApiKey, setShowWhisperApiKey] = useState(false);
+  const summaryMaxTokens = ai.config.summary_max_tokens;
+
+  const handleSummaryMaxTokensChange = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      ai.updateConfig({ summary_max_tokens: undefined });
+      return;
+    }
+
+    const parsed = Number.parseInt(trimmed, 10);
+    if (Number.isNaN(parsed)) return;
+    if (parsed <= 0) {
+      ai.updateConfig({ summary_max_tokens: undefined });
+      return;
+    }
+
+    ai.updateConfig({ summary_max_tokens: parsed });
+  };
 
   const providers: {
     id: AIProvider;
@@ -653,7 +671,7 @@ export function AISection({ highlightId }: AISectionProps) {
               </div>
             </div>
 
-            {/* Model Advanced Details */}
+            {/* Model response limits */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-1.5">
@@ -688,43 +706,34 @@ export function AISection({ highlightId }: AISectionProps) {
 
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-1.5">
-                  <Globe className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-xs font-semibold">{t('ai.summaryLanguage')}</span>
+                  <Settings2 className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-semibold">{t('ai.maxTokens')}</span>
                 </div>
-                <Select
-                  value={ai.config.summary_language}
-                  onValueChange={(v) => ai.updateConfig({ summary_language: v })}
-                >
-                  <SelectTrigger className="h-9 bg-background/50 border-border/80 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto" className="text-xs">
-                      {t('ai.autoSameAsVideo')}
-                    </SelectItem>
-                    {LANGUAGE_OPTIONS.map((l) => (
-                      <SelectItem key={l.code} value={l.code} className="text-xs">
-                        {l.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  step={256}
+                  value={summaryMaxTokens ?? ''}
+                  onChange={(e) => handleSummaryMaxTokensChange(e.target.value)}
+                  placeholder={t('ai.maxTokensAuto')}
+                  className="h-9 bg-background/50 border-border/80 text-xs"
+                />
                 <p className="text-[10px] text-muted-foreground leading-normal">
-                  {t('ai.summaryLanguageDesc')}
+                  {t('ai.maxTokensDesc')}
                 </p>
               </div>
             </div>
           </SettingsCard>
 
           {/* Section: Summary preferences */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Preferences block */}
-            <SettingsCard className="p-5 space-y-4">
-              <div className="flex items-center gap-2 pb-2">
-                <Sliders className="w-4 h-4 text-primary" />
-                <h3 className="text-sm font-semibold">{t('ai.summaryCustomization')}</h3>
-              </div>
+          <SettingsCard className="p-5 space-y-5">
+            <div className="flex items-center gap-2 pb-2">
+              <Sliders className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold">{t('ai.summaryCustomization')}</h3>
+            </div>
 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex flex-col gap-0.5">
@@ -763,150 +772,183 @@ export function AISection({ highlightId }: AISectionProps) {
                   </div>
                 </div>
 
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs font-semibold">{t('ai.summaryLanguage')}</span>
+                  </div>
+                  <Select
+                    value={ai.config.summary_language}
+                    onValueChange={(v) => ai.updateConfig({ summary_language: v })}
+                  >
+                    <SelectTrigger className="h-9 bg-background/50 border-border/80 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto" className="text-xs">
+                        {t('ai.autoSameAsVideo')}
+                      </SelectItem>
+                      {LANGUAGE_OPTIONS.map((l) => (
+                        <SelectItem key={l.code} value={l.code} className="text-xs">
+                          {l.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground leading-normal">
+                    {t('ai.summaryLanguageDesc')}
+                  </p>
+                </div>
+
                 <div className="p-3 bg-muted/20 rounded-lg text-xs leading-relaxed text-muted-foreground/90">
                   <span className="font-semibold text-foreground">{t('ai.tip')}</span>{' '}
                   {t('ai.conciseStyleTip')}
                 </div>
               </div>
-            </SettingsCard>
 
-            {/* Transcript languages reordering list card */}
-            <SettingsCard
-              id="transcript-languages"
-              className={cn(
-                'p-5 space-y-4 transition-all duration-300',
-                highlightId === 'transcript-languages' &&
-                  'ring-2 ring-primary bg-primary/5 border-primary/20',
-              )}
-            >
-              <div className="flex items-center justify-between pb-2">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-primary" />
-                  <h3 className="text-sm font-semibold">{t('ai.transcriptLanguages')}</h3>
+              <div
+                id="transcript-languages"
+                className={cn(
+                  'space-y-4 rounded-lg transition-all duration-300',
+                  highlightId === 'transcript-languages' &&
+                    'ring-2 ring-primary bg-primary/5 border-primary/20 p-3',
+                )}
+              >
+                <div className="flex items-center justify-between pb-2">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-primary" />
+                    <h3 className="text-sm font-semibold">{t('ai.transcriptLanguages')}</h3>
+                  </div>
+                  <span className="text-[10px] font-medium text-muted-foreground/80 bg-muted px-2 py-0.5 rounded-full">
+                    {t('ai.priorityTopToBottom')}
+                  </span>
                 </div>
-                <span className="text-[10px] font-medium text-muted-foreground/80 bg-muted px-2 py-0.5 rounded-full">
-                  {t('ai.priorityTopToBottom')}
-                </span>
-              </div>
 
-              <div className="space-y-3">
-                <p className="text-[11px] text-muted-foreground leading-normal">
-                  {t('ai.transcriptLanguagesDesc')}
-                </p>
+                <div className="space-y-3">
+                  <p className="text-[11px] text-muted-foreground leading-normal">
+                    {t('ai.transcriptLanguagesDesc')}
+                  </p>
 
-                {/* Draggable-vibed order list */}
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {(ai.config.transcript_languages || DEFAULT_TRANSCRIPT_LANGUAGES).map(
-                    (code, index) => {
-                      const lang = LANGUAGE_OPTIONS.find((l) => l.code === code);
-                      const currentLangs =
-                        ai.config.transcript_languages || DEFAULT_TRANSCRIPT_LANGUAGES;
-                      return (
-                        <div
-                          key={code}
-                          className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 border border-border/40 hover:bg-muted/50 transition-colors group"
-                        >
-                          <div className="flex items-center gap-1.5 text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">
-                            <GripVertical className="w-3.5 h-3.5 cursor-grab active:cursor-grabbing" />
-                            <span className="text-[10px] font-mono w-3.5 text-center bg-muted/60 rounded px-1">
-                              {index + 1}
-                            </span>
-                          </div>
-
-                          <span className="flex-1 text-xs font-medium">{lang?.name || code}</span>
-
-                          <Badge
-                            variant="outline"
-                            className="text-[9px] font-mono px-1.5 bg-background border-border/60"
+                  {/* Draggable-vibed order list */}
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {(ai.config.transcript_languages || DEFAULT_TRANSCRIPT_LANGUAGES).map(
+                      (code, index) => {
+                        const lang = LANGUAGE_OPTIONS.find((l) => l.code === code);
+                        const currentLangs =
+                          ai.config.transcript_languages || DEFAULT_TRANSCRIPT_LANGUAGES;
+                        return (
+                          <div
+                            key={code}
+                            className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 border border-border/40 hover:bg-muted/50 transition-colors group"
                           >
-                            {code}
-                          </Badge>
+                            <div className="flex items-center gap-1.5 text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">
+                              <GripVertical className="w-3.5 h-3.5 cursor-grab active:cursor-grabbing" />
+                              <span className="text-[10px] font-mono w-3.5 text-center bg-muted/60 rounded px-1">
+                                {index + 1}
+                              </span>
+                            </div>
 
-                          {/* Move control micro-buttons */}
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              type="button"
-                              className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-                              disabled={index === 0}
-                              onClick={() => {
-                                const langs = [...currentLangs];
-                                [langs[index - 1], langs[index]] = [langs[index], langs[index - 1]];
-                                ai.updateConfig({ transcript_languages: langs });
-                              }}
-                              title={t('ai.moveLanguageUp')}
-                            >
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-                              disabled={index === currentLangs.length - 1}
-                              onClick={() => {
-                                const langs = [...currentLangs];
-                                [langs[index], langs[index + 1]] = [langs[index + 1], langs[index]];
-                                ai.updateConfig({ transcript_languages: langs });
-                              }}
-                              title={t('ai.moveLanguageDown')}
-                            >
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
+                            <span className="flex-1 text-xs font-medium">{lang?.name || code}</span>
 
-                            <button
-                              type="button"
-                              className="p-1 hover:bg-destructive/15 hover:text-destructive rounded text-muted-foreground transition-colors ml-1"
-                              onClick={() => {
-                                const langs = currentLangs.filter((l) => l !== code);
-                                ai.updateConfig({
-                                  transcript_languages:
-                                    langs.length > 0 ? langs : DEFAULT_TRANSCRIPT_LANGUAGES,
-                                });
-                              }}
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] font-mono px-1.5 bg-background border-border/60"
                             >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+                              {code}
+                            </Badge>
+
+                            {/* Move control micro-buttons */}
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+                                disabled={index === 0}
+                                onClick={() => {
+                                  const langs = [...currentLangs];
+                                  [langs[index - 1], langs[index]] = [
+                                    langs[index],
+                                    langs[index - 1],
+                                  ];
+                                  ai.updateConfig({ transcript_languages: langs });
+                                }}
+                                title={t('ai.moveLanguageUp')}
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+                                disabled={index === currentLangs.length - 1}
+                                onClick={() => {
+                                  const langs = [...currentLangs];
+                                  [langs[index], langs[index + 1]] = [
+                                    langs[index + 1],
+                                    langs[index],
+                                  ];
+                                  ai.updateConfig({ transcript_languages: langs });
+                                }}
+                                title={t('ai.moveLanguageDown')}
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="p-1 hover:bg-destructive/15 hover:text-destructive rounded text-muted-foreground transition-colors ml-1"
+                                onClick={() => {
+                                  const langs = currentLangs.filter((l) => l !== code);
+                                  ai.updateConfig({
+                                    transcript_languages:
+                                      langs.length > 0 ? langs : DEFAULT_TRANSCRIPT_LANGUAGES,
+                                  });
+                                }}
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    },
-                  )}
-                </div>
+                        );
+                      },
+                    )}
+                  </div>
 
-                {/* Add preferred language dropdown */}
-                {(() => {
-                  const currentLangs =
-                    ai.config.transcript_languages || DEFAULT_TRANSCRIPT_LANGUAGES;
-                  const availableLangs = LANGUAGE_OPTIONS.filter(
-                    (l) => !currentLangs.includes(l.code),
-                  );
-                  if (availableLangs.length === 0) return null;
-                  return (
-                    <Select
-                      value=""
-                      onValueChange={(code) => {
-                        if (code) {
-                          ai.updateConfig({ transcript_languages: [...currentLangs, code] });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-full h-9 bg-background/50 border-border/80 text-xs text-muted-foreground hover:text-foreground hover:bg-background/80 transition-all">
-                        <div className="flex items-center gap-1.5">
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>{t('ai.addLanguage')}</span>
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableLangs.map((lang) => (
-                          <SelectItem key={lang.code} value={lang.code} className="text-xs">
-                            {lang.name} ({lang.code})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  );
-                })()}
+                  {/* Add preferred language dropdown */}
+                  {(() => {
+                    const currentLangs =
+                      ai.config.transcript_languages || DEFAULT_TRANSCRIPT_LANGUAGES;
+                    const availableLangs = LANGUAGE_OPTIONS.filter(
+                      (l) => !currentLangs.includes(l.code),
+                    );
+                    if (availableLangs.length === 0) return null;
+                    return (
+                      <Select
+                        value=""
+                        onValueChange={(code) => {
+                          if (code) {
+                            ai.updateConfig({ transcript_languages: [...currentLangs, code] });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-full h-9 bg-background/50 border-border/80 text-xs text-muted-foreground hover:text-foreground hover:bg-background/80 transition-all">
+                          <div className="flex items-center gap-1.5">
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>{t('ai.addLanguage')}</span>
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableLangs.map((lang) => (
+                            <SelectItem key={lang.code} value={lang.code} className="text-xs">
+                              {lang.name} ({lang.code})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
+                </div>
               </div>
-            </SettingsCard>
-          </div>
+            </div>
+          </SettingsCard>
 
           {/* Section: Whisper transcription engine fallback */}
           <SettingsCard

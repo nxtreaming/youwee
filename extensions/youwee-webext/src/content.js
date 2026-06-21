@@ -26,6 +26,15 @@
   let collapsedState = false;
   let mediaMode = 'video';
 
+  const ACTION_ICONS = {
+    download:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
+    queue:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h10"></path><path d="M4 12h10"></path><path d="M4 17h7"></path><path d="M18 10v8"></path><path d="M14 14h8"></path></svg>',
+    summary:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z"></path><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"></path></svg>',
+  };
+
   function isTrustedUserEvent(event) {
     return !!event?.isTrusted;
   }
@@ -241,6 +250,15 @@
   }
 
   function openDeepLink(action, sourceUrl) {
+    if (action === 'summary') {
+      try {
+        ext.openSummaryDeepLink(sourceUrl || location.href);
+        return { ok: true, options: { action } };
+      } catch (error) {
+        return { ok: false, error };
+      }
+    }
+
     const options = getCurrentOptions(action);
 
     try {
@@ -260,6 +278,11 @@
 
     if (action === 'queue_only') {
       setFeedback(ext.t('floatingButtonQueueSent', 'Sent to queue'), 'ok');
+      return;
+    }
+
+    if (action === 'summary') {
+      setFeedback(ext.t('floatingButtonSummaryOpening', 'Opening summary...'), 'ok');
       return;
     }
 
@@ -297,8 +320,25 @@
     setPanelOpen(false);
   }
 
+  function getRuntimeAssetUrl(path) {
+    try {
+      return ext.getExtensionApi()?.runtime?.getURL?.(path) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function createLogoMarkup(logoUrl) {
+    if (logoUrl) {
+      return `<img class="youwee-floating__logo-img" src="${logoUrl}" alt="Youwee" />`;
+    }
+
+    return '<span class="youwee-floating__logo-fallback" aria-hidden="true">Y</span>';
+  }
+
   function buildWidget() {
-    const logoUrl = api?.runtime?.getURL?.('icons/logo-64.png') || '';
+    const logoMarkup = createLogoMarkup(getRuntimeAssetUrl('icons/logo-64.png'));
+    const canSummarize = ext.isYouTubeUrl(location.href);
 
     const container = document.createElement('div');
     container.id = ROOT_ID;
@@ -310,7 +350,7 @@
     tab.type = 'button';
     tab.className = 'youwee-floating__tab';
     tab.title = ext.t('floatingExpand', 'Expand');
-    tab.innerHTML = `<img class="youwee-floating__logo-img" src="${logoUrl}" alt="Youwee" />`;
+    tab.innerHTML = logoMarkup;
     tab.addEventListener('click', (event) => {
       if (!isTrustedUserEvent(event)) return;
       setCollapsedState(false);
@@ -322,7 +362,7 @@
     launch.title = ext.t('floatingLauncher', 'Youwee');
     launch.innerHTML = `
       <span class="youwee-floating__logo">
-        <img class="youwee-floating__logo-img" src="${logoUrl}" alt="Youwee" />
+        ${logoMarkup}
       </span>
       <span class="youwee-floating__text">${ext.t('floatingLauncher', 'Youwee')}</span>
       <span class="youwee-floating__chevron">▾</span>
@@ -369,10 +409,19 @@
       <select id="youwee-quality-select" class="youwee-floating__select"></select>
       <div class="youwee-floating__actions">
         <button type="button" class="youwee-floating__action youwee-floating__action--primary" data-action="download_now">
-          ${ext.t('floatingButtonDownloadNow', 'Download now')}
+          ${ACTION_ICONS.download}<span>${ext.t('floatingButtonDownloadNow', 'Download now')}</span>
         </button>
         <button type="button" class="youwee-floating__action youwee-floating__action--secondary" data-action="queue_only">
-          ${ext.t('floatingButtonAddQueue', 'Add to queue')}
+          ${ACTION_ICONS.queue}<span>${ext.t('floatingButtonAddQueue', 'Add to queue')}</span>
+        </button>
+        <button
+          type="button"
+          class="youwee-floating__action youwee-floating__action--summary"
+          data-action="summary"
+          ${canSummarize ? '' : 'disabled'}
+          title="${canSummarize ? '' : ext.t('floatingSummaryUnavailable', 'Summary is available for YouTube videos')}"
+        >
+          ${ACTION_ICONS.summary}<span>${ext.t('floatingButtonSummary', 'AI Summary')}</span>
         </button>
       </div>
       <div class="youwee-floating__feedback" aria-live="polite"></div>
@@ -414,6 +463,11 @@
     dropdown.querySelector('[data-action="queue_only"]')?.addEventListener('click', (event) => {
       if (!isTrustedUserEvent(event)) return;
       onActionClick('queue_only');
+    });
+
+    dropdown.querySelector('[data-action="summary"]')?.addEventListener('click', (event) => {
+      if (!isTrustedUserEvent(event)) return;
+      onActionClick('summary');
     });
 
     dropdown.querySelector('[data-action="collapse"]')?.addEventListener('click', (event) => {
@@ -499,7 +553,38 @@
   if (api?.runtime?.onMessage) {
     api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (sender?.id && sender.id !== api.runtime.id) return false;
+
+      if (message?.type === 'youwee:floating-status') {
+        if (isEnabled()) {
+          ensureWidget();
+        }
+        sendResponse?.({
+          ok: true,
+          allowlisted: ext.isAllowlistedUrl(location.href),
+          enabled: isEnabled(),
+          visible: !!root?.isConnected,
+        });
+        return false;
+      }
+
       if (message?.type !== 'youwee:open-deep-link') return false;
+
+      if (message.action === 'summary') {
+        try {
+          const targetUrl =
+            typeof message.url === 'string' && message.url ? message.url : location.href;
+          if (!ext.parseHttpUrl(targetUrl)) {
+            sendResponse?.({ ok: false, error: 'Invalid URL' });
+            return false;
+          }
+          ext.openSummaryDeepLink(targetUrl);
+          sendResponse?.({ ok: true });
+        } catch (error) {
+          sendResponse?.({ ok: false, error: String(error) });
+        }
+
+        return false;
+      }
 
       const options = {
         action: ext.normalizeAction(message.action),

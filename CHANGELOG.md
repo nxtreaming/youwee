@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Extension AI Summary** - Added a Summary button in the browser extension to open YouTube videos directly in AI Summary
+- **AI summary token limit** - Added an optional Settings field to set maximum output tokens for generated summaries
+
+### Changed
+- **Extension interface** - Refined the browser extension popup and floating menu with a cleaner style that matches the music player
+
+### Fixed
+- **Extension floating button** - Fixed the browser extension floating button not appearing or crashing on tabs that were already open when the extension was installed or reloaded
+- **Extension cold-start downloads** - Fixed browser extension `Download now` links opening Youwee without adding the video when the desktop app was not already running
+- **AI summary video info** - Fixed AI Summary getting stuck while fetching video info for videos whose subtitles are available but video formats cannot be selected
+- **AI summary length** - Removed the default hard-coded summary output token limit so providers can use their model defaults unless users set a custom value
+
 ## [0.17.2] - 2026-06-17
 
 ### Changed

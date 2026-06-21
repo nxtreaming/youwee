@@ -5,6 +5,14 @@ use std::time::Duration;
 const DEFAULT_AI_TIMEOUT_SECONDS: u64 = 120;
 const MIN_AI_TIMEOUT_SECONDS: u64 = 30;
 const MAX_AI_TIMEOUT_SECONDS: u64 = 60 * 60;
+fn normalized_summary_max_tokens(custom_max_tokens: Option<u32>) -> Option<u32> {
+    custom_max_tokens.filter(|value| *value > 0)
+}
+
+#[cfg(test)]
+fn summary_max_tokens_for_config(config: &AIConfig) -> Option<u32> {
+    normalized_summary_max_tokens(config.summary_max_tokens)
+}
 
 fn normalized_timeout_seconds(timeout_seconds: Option<u64>) -> u64 {
     timeout_seconds
@@ -91,6 +99,14 @@ fn extract_openai_compatible_text(json: &serde_json::Value) -> Option<String> {
     None
 }
 
+fn openai_compatible_finish_reason(json: &serde_json::Value) -> Option<&str> {
+    let choice = json.get("choices")?.get(0)?;
+    choice
+        .get("finish_reason")
+        .and_then(|reason| reason.as_str())
+        .or_else(|| choice.get("stop_reason").and_then(|reason| reason.as_str()))
+}
+
 fn parse_openai_compatible_response(
     provider_label: &str,
     status: reqwest::StatusCode,
@@ -114,13 +130,25 @@ fn parse_openai_compatible_response(
         ))
     })?;
 
-    extract_openai_compatible_text(&json).ok_or_else(|| {
+    let text = extract_openai_compatible_text(&json).ok_or_else(|| {
         AIError::ParseError(format!(
             "{} API response did not contain message content. Response: {}",
             provider_label,
             response_snippet(response_text)
         ))
-    })
+    })?;
+
+    if matches!(
+        openai_compatible_finish_reason(&json),
+        Some("length" | "max_tokens")
+    ) {
+        return Err(AIError::ApiError(format!(
+            "{} API response was cut off by the output token limit. Try again with a shorter transcript or a provider/model that supports longer output.",
+            provider_label
+        )));
+    }
+
+    Ok(text)
 }
 
 pub async fn generate_with_gemini(
@@ -131,9 +159,11 @@ pub async fn generate_with_gemini(
     language: &str,
     title: Option<&str>,
     timeout_seconds: Option<u64>,
+    summary_max_tokens: Option<u32>,
 ) -> Result<SummaryResult, AIError> {
     let client = ai_client(timeout_seconds)?;
     let prompt = build_prompt(transcript, style, language, title);
+    let max_tokens = normalized_summary_max_tokens(summary_max_tokens);
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
         model
@@ -143,16 +173,25 @@ pub async fn generate_with_gemini(
         model.contains("flash-preview") || model.contains("2.5") || model.contains("3-");
 
     let body = if is_thinking_model {
-        serde_json::json!({
+        let mut body = serde_json::json!({
             "contents": [{ "parts": [{ "text": prompt }] }]
-        })
+        });
+        if let Some(max_tokens) = max_tokens {
+            body["generationConfig"] = serde_json::json!({
+                "maxOutputTokens": max_tokens
+            });
+        }
+        body
     } else {
+        let mut generation_config = serde_json::json!({
+            "temperature": 0.7
+        });
+        if let Some(max_tokens) = max_tokens {
+            generation_config["maxOutputTokens"] = serde_json::json!(max_tokens);
+        }
         serde_json::json!({
             "contents": [{ "parts": [{ "text": prompt }] }],
-            "generationConfig": {
-                "temperature": 0.7,
-                "maxOutputTokens": 2048
-            }
+            "generationConfig": generation_config
         })
     };
 
@@ -258,16 +297,20 @@ pub async fn generate_with_openai(
     language: &str,
     title: Option<&str>,
     timeout_seconds: Option<u64>,
+    summary_max_tokens: Option<u32>,
 ) -> Result<SummaryResult, AIError> {
     let client = ai_client(timeout_seconds)?;
     let prompt = build_prompt(transcript, style, language, title);
+    let max_tokens = normalized_summary_max_tokens(summary_max_tokens);
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "messages": [{ "role": "user", "content": prompt }],
-        "temperature": 0.7,
-        "max_tokens": 1024,
+        "temperature": 0.7
     });
+    if let Some(max_tokens) = max_tokens {
+        body["max_tokens"] = serde_json::json!(max_tokens);
+    }
 
     let response = client
         .post("https://api.openai.com/v1/chat/completions")
@@ -297,16 +340,25 @@ pub async fn generate_with_ollama(
     language: &str,
     title: Option<&str>,
     timeout_seconds: Option<u64>,
+    summary_max_tokens: Option<u32>,
 ) -> Result<SummaryResult, AIError> {
     let client = ai_client(timeout_seconds)?;
     let prompt = build_prompt(transcript, style, language, title);
     let url = format!("{}/api/generate", ollama_url.trim_end_matches('/'));
+    let max_tokens = normalized_summary_max_tokens(summary_max_tokens);
+
+    let mut options = serde_json::json!({
+        "temperature": 0.7
+    });
+    if let Some(max_tokens) = max_tokens {
+        options["num_predict"] = serde_json::json!(max_tokens);
+    }
 
     let body = serde_json::json!({
         "model": model,
         "prompt": prompt,
         "stream": false,
-        "options": { "temperature": 0.7 }
+        "options": options
     });
 
     let response = client
@@ -353,16 +405,20 @@ pub async fn generate_with_deepseek(
     language: &str,
     title: Option<&str>,
     timeout_seconds: Option<u64>,
+    summary_max_tokens: Option<u32>,
 ) -> Result<SummaryResult, AIError> {
     let client = ai_client(timeout_seconds)?;
     let prompt = build_prompt(transcript, style, language, title);
+    let max_tokens = normalized_summary_max_tokens(summary_max_tokens);
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "messages": [{ "role": "user", "content": prompt }],
-        "temperature": 0.7,
-        "max_tokens": 2048,
+        "temperature": 0.7
     });
+    if let Some(max_tokens) = max_tokens {
+        body["max_tokens"] = serde_json::json!(max_tokens);
+    }
 
     let response = client
         .post("https://api.deepseek.com/chat/completions")
@@ -392,16 +448,20 @@ pub async fn generate_with_qwen(
     language: &str,
     title: Option<&str>,
     timeout_seconds: Option<u64>,
+    summary_max_tokens: Option<u32>,
 ) -> Result<SummaryResult, AIError> {
     let client = ai_client(timeout_seconds)?;
     let prompt = build_prompt(transcript, style, language, title);
+    let max_tokens = normalized_summary_max_tokens(summary_max_tokens);
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "messages": [{ "role": "user", "content": prompt }],
-        "temperature": 0.7,
-        "max_tokens": 2048,
+        "temperature": 0.7
     });
+    if let Some(max_tokens) = max_tokens {
+        body["max_tokens"] = serde_json::json!(max_tokens);
+    }
 
     let response = client
         .post("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")
@@ -432,18 +492,22 @@ pub async fn generate_with_proxy(
     language: &str,
     title: Option<&str>,
     timeout_seconds: Option<u64>,
+    summary_max_tokens: Option<u32>,
 ) -> Result<SummaryResult, AIError> {
     let client = ai_client(timeout_seconds)?;
     let prompt = build_prompt(transcript, style, language, title);
+    let max_tokens = normalized_summary_max_tokens(summary_max_tokens);
 
     let url = chat_completions_url(proxy_url);
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "messages": [{ "role": "user", "content": prompt }],
-        "temperature": 0.7,
-        "max_tokens": 1024,
+        "temperature": 0.7
     });
+    if let Some(max_tokens) = max_tokens {
+        body["max_tokens"] = serde_json::json!(max_tokens);
+    }
 
     let response = client
         .post(&url)
@@ -479,18 +543,22 @@ pub async fn generate_with_lmstudio(
     language: &str,
     title: Option<&str>,
     timeout_seconds: Option<u64>,
+    summary_max_tokens: Option<u32>,
 ) -> Result<SummaryResult, AIError> {
     let client = ai_client(timeout_seconds)?;
     let prompt = build_prompt(transcript, style, language, title);
+    let max_tokens = normalized_summary_max_tokens(summary_max_tokens);
 
     let url = chat_completions_url(lmstudio_url);
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "messages": [{ "role": "user", "content": prompt }],
-        "temperature": 0.7,
-        "max_tokens": 1024,
+        "temperature": 0.7
     });
+    if let Some(max_tokens) = max_tokens {
+        body["max_tokens"] = serde_json::json!(max_tokens);
+    }
 
     let response = client
         .post(&url)
@@ -878,5 +946,52 @@ pub(super) async fn generate_raw_for_provider(
             )
             .await
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_summary_max_tokens_is_unlimited() {
+        let config = AIConfig::default();
+
+        assert_eq!(summary_max_tokens_for_config(&config), None);
+    }
+
+    #[test]
+    fn custom_summary_max_tokens_is_used_when_set() {
+        let config = AIConfig {
+            summary_max_tokens: Some(8000),
+            ..AIConfig::default()
+        };
+
+        assert_eq!(summary_max_tokens_for_config(&config), Some(8000));
+    }
+
+    #[test]
+    fn zero_summary_max_tokens_is_treated_as_unlimited() {
+        let config = AIConfig {
+            summary_max_tokens: Some(0),
+            ..AIConfig::default()
+        };
+
+        assert_eq!(summary_max_tokens_for_config(&config), None);
+    }
+
+    #[test]
+    fn openai_compatible_parser_rejects_length_truncated_output() {
+        let response = r#"{
+            "choices": [{
+                "message": { "content": "Partial summary" },
+                "finish_reason": "length"
+            }]
+        }"#;
+
+        let error =
+            parse_openai_compatible_response("Proxy", reqwest::StatusCode::OK, response).unwrap_err();
+
+        assert!(matches!(error, AIError::ApiError(message) if message.contains("cut off")));
     }
 }

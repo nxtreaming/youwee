@@ -317,6 +317,13 @@ export const SEARCHABLE_SETTINGS: SearchableSetting[] = [
     keywords: ['timeout', 'time', 'limit', 'seconds', 'minutes'],
     section: 'ai',
   },
+  {
+    id: 'ai-max-tokens',
+    labelKey: 'ai.maxTokens',
+    descriptionKey: 'ai.maxTokensDesc',
+    keywords: ['token', 'tokens', 'max', 'limit', 'output', 'summary', 'length'],
+    section: 'ai',
+  },
 
   // Network Section
   {

@@ -8,6 +8,7 @@
   let activeTabId = null;
   const manifestVersion = api?.runtime?.getManifest?.()?.version || '0.0.0';
   let floatingPrefs = { enabled: true, collapsedByHost: {} };
+  let floatingPrefsChangedInPopup = false;
 
   const titleEl = document.getElementById('title');
   const versionLinkEl = document.getElementById('versionLink');
@@ -27,7 +28,17 @@
   const madeWithByEl = document.getElementById('madeWithBy');
   const downloadBtn = document.getElementById('downloadBtn');
   const queueBtn = document.getElementById('queueBtn');
+  const summaryBtn = document.getElementById('summaryBtn');
   let mediaMode = 'video';
+
+  const ACTION_ICONS = {
+    download:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
+    queue:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h10"></path><path d="M4 12h10"></path><path d="M4 17h7"></path><path d="M18 10v8"></path><path d="M14 14h8"></path></svg>',
+    summary:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z"></path><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"></path></svg>',
+  };
 
   function queryTabs(query) {
     if (!api?.tabs?.query) return Promise.resolve([]);
@@ -72,6 +83,82 @@
         resolve(response);
       });
     });
+  }
+
+  function executeScriptFiles(tabId, files) {
+    const scripting = api?.scripting;
+    if (!scripting?.executeScript) {
+      return Promise.reject(new Error('scripting.executeScript not available'));
+    }
+
+    const details = { target: { tabId }, files };
+    try {
+      const maybePromise = scripting.executeScript(details);
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        return maybePromise;
+      }
+    } catch {
+      // Fallback to callback style.
+    }
+
+    return new Promise((resolve, reject) => {
+      scripting.executeScript(details, (result) => {
+        const lastError = api.runtime?.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message));
+          return;
+        }
+        resolve(result);
+      });
+    });
+  }
+
+  function insertCssFile(tabId, file) {
+    const scripting = api?.scripting;
+    if (!scripting?.insertCSS) {
+      return Promise.reject(new Error('scripting.insertCSS not available'));
+    }
+
+    const details = { target: { tabId }, files: [file] };
+    try {
+      const maybePromise = scripting.insertCSS(details);
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        return maybePromise;
+      }
+    } catch {
+      // Fallback to callback style.
+    }
+
+    return new Promise((resolve, reject) => {
+      scripting.insertCSS(details, () => {
+        const lastError = api.runtime?.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message));
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+
+  async function ensureFloatingContentScript() {
+    if (!Number.isInteger(activeTabId) || !currentUrl || !ext.isAllowlistedUrl(currentUrl)) {
+      return;
+    }
+
+    try {
+      await sendMessageToTab(activeTabId, { type: 'youwee:floating-status' });
+      return;
+    } catch {
+      // Existing tabs do not always receive content scripts after install or reload.
+    }
+
+    if (!api?.scripting?.executeScript) {
+      return;
+    }
+
+    await insertCssFile(activeTabId, 'content.css').catch(() => {});
+    await executeScriptFiles(activeTabId, ['shared.js', 'content.js']);
   }
 
   function setStatus(text, tone) {
@@ -162,12 +249,12 @@
     floatingToggleBtn.setAttribute('aria-label', t('popupFloatingLabel', 'Floating button'));
   }
 
-  async function loadFloatingPrefs() {
+  async function readFloatingPrefs() {
     try {
       const result = await storageGet(STORAGE_KEY);
-      floatingPrefs = normalizeFloatingPrefs(result?.[STORAGE_KEY]);
+      return normalizeFloatingPrefs(result?.[STORAGE_KEY]);
     } catch {
-      floatingPrefs = normalizeFloatingPrefs(null);
+      return normalizeFloatingPrefs(null);
     }
   }
 
@@ -176,11 +263,15 @@
   }
 
   async function handleFloatingToggle() {
+    floatingPrefsChangedInPopup = true;
     floatingPrefs.enabled = !isFloatingEnabled();
     updateFloatingToggleUi();
 
     try {
       await persistFloatingPrefs();
+      if (floatingPrefs.enabled) {
+        await ensureFloatingContentScript().catch(() => {});
+      }
       setStatus(
         floatingPrefs.enabled
           ? t('popupFloatingEnabled', 'Enabled')
@@ -200,12 +291,21 @@
   function handleStorageChanged(changes, areaName) {
     if (areaName !== 'local') return;
     if (!changes || !changes[STORAGE_KEY]) return;
+    floatingPrefsChangedInPopup = false;
     floatingPrefs = normalizeFloatingPrefs(changes[STORAGE_KEY].newValue);
     updateFloatingToggleUi();
   }
 
   function t(key, fallback) {
     return ext.t(key, fallback);
+  }
+
+  function setActionButtonContent(button, icon, label) {
+    button.innerHTML = `${icon}<span></span>`;
+    const labelEl = button.querySelector('span');
+    if (labelEl) {
+      labelEl.textContent = label;
+    }
   }
 
   function getMediaValue() {
@@ -279,8 +379,13 @@
     qualityLabelEl.textContent = t('floatingQuality', 'Quality');
     if (mediaVideoBtn) mediaVideoBtn.textContent = t('floatingMediaVideo', 'Video');
     if (mediaAudioBtn) mediaAudioBtn.textContent = t('floatingMediaAudio', 'Audio');
-    downloadBtn.textContent = t('popupPrimaryAction', 'Download now with Youwee');
-    queueBtn.textContent = t('popupQueueAction', 'Add to queue in Youwee');
+    setActionButtonContent(
+      downloadBtn,
+      ACTION_ICONS.download,
+      t('popupPrimaryAction', 'Download now with Youwee'),
+    );
+    setActionButtonContent(queueBtn, ACTION_ICONS.queue, t('popupQueueAction', 'Add to queue'));
+    setActionButtonContent(summaryBtn, ACTION_ICONS.summary, t('popupSummaryAction', 'AI Summary'));
     madeWithPrefixEl.textContent = t('popupMadeWith', 'Made with');
     madeWithByEl.textContent = t('popupBy', 'by');
     updateFloatingToggleUi();
@@ -295,6 +400,8 @@
       setStatus(t('popupStatusInvalid', 'This tab cannot be sent to Youwee.'), 'error');
       downloadBtn.disabled = true;
       queueBtn.disabled = true;
+      summaryBtn.disabled = true;
+      summaryBtn.title = '';
       copyUrlIconBtn.disabled = true;
       if (mediaVideoBtn) mediaVideoBtn.disabled = true;
       if (mediaAudioBtn) mediaAudioBtn.disabled = true;
@@ -303,9 +410,14 @@
     }
 
     currentUrl = ext.normalizeVideoUrl(url);
+    const canSummarize = ext.isYouTubeUrl(currentUrl);
     urlValueEl.textContent = currentUrl;
     downloadBtn.disabled = false;
     queueBtn.disabled = false;
+    summaryBtn.disabled = !canSummarize;
+    summaryBtn.title = canSummarize
+      ? ''
+      : t('floatingSummaryUnavailable', 'Summary is available for YouTube videos');
     copyUrlIconBtn.disabled = false;
     if (mediaVideoBtn) mediaVideoBtn.disabled = false;
     if (mediaAudioBtn) mediaAudioBtn.disabled = false;
@@ -353,6 +465,30 @@
     }
   }
 
+  async function handleSummaryClick() {
+    if (!currentUrl) return;
+
+    try {
+      if (Number.isInteger(activeTabId)) {
+        await sendMessageToTab(activeTabId, {
+          type: 'youwee:open-deep-link',
+          url: currentUrl,
+          action: 'summary',
+        });
+      } else {
+        ext.openSummaryDeepLink(currentUrl);
+      }
+      setStatus(t('popupStatusSummaryOpening', 'Opening AI Summary in Youwee...'), 'ok');
+    } catch {
+      try {
+        ext.openSummaryDeepLink(currentUrl);
+        setStatus(t('popupStatusSummaryOpening', 'Opening AI Summary in Youwee...'), 'ok');
+      } catch {
+        setStatus(t('popupStatusOpenFailed', 'Failed to open Youwee.'), 'error');
+      }
+    }
+  }
+
   async function handleCopyClick() {
     if (!currentUrl) return;
     try {
@@ -363,26 +499,15 @@
     }
   }
 
-  async function init() {
-    await loadFloatingPrefs();
-    updateTexts();
-    setMediaValue('video');
-    versionLinkEl.href = ext.RELEASE_URL;
-
-    try {
-      const tabs = await queryTabs({ active: true, currentWindow: true });
-      const activeTab = Array.isArray(tabs) ? tabs[0] : null;
-      activeTabId = Number.isInteger(activeTab?.id) ? activeTab.id : null;
-      updateUrlState(activeTab?.url || '');
-    } catch {
-      updateUrlState('');
-    }
-
+  function attachEventListeners() {
     downloadBtn.addEventListener('click', () => {
       void handleDownloadClick('download_now');
     });
     queueBtn.addEventListener('click', () => {
       void handleDownloadClick('queue_only');
+    });
+    summaryBtn.addEventListener('click', () => {
+      void handleSummaryClick();
     });
     copyUrlIconBtn.addEventListener('click', () => {
       void handleCopyClick();
@@ -396,6 +521,39 @@
     if (api?.storage?.onChanged?.addListener) {
       api.storage.onChanged.addListener(handleStorageChanged);
     }
+  }
+
+  async function hydratePopupState() {
+    const storedFloatingPrefs = await readFloatingPrefs();
+    if (!floatingPrefsChangedInPopup) {
+      floatingPrefs = storedFloatingPrefs;
+      updateFloatingToggleUi();
+    }
+
+    try {
+      const tabs = await queryTabs({ active: true, currentWindow: true });
+      const activeTab = Array.isArray(tabs) ? tabs[0] : null;
+      activeTabId = Number.isInteger(activeTab?.id) ? activeTab.id : null;
+      updateUrlState(activeTab?.url || '');
+      if (isFloatingEnabled()) {
+        window.setTimeout(() => {
+          void ensureFloatingContentScript();
+        }, 150);
+      }
+    } catch {
+      updateUrlState('');
+    }
+  }
+
+  function init() {
+    updateTexts();
+    setMediaValue('video');
+    versionLinkEl.href = ext.RELEASE_URL;
+    attachEventListeners();
+
+    window.setTimeout(() => {
+      void hydratePopupState();
+    }, 0);
   }
 
   void init();

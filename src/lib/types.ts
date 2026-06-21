@@ -895,6 +895,7 @@ export interface AIConfig {
   summary_style: SummaryStyle;
   summary_language: string;
   timeout_seconds?: number; // Timeout for AI generation (default 120s)
+  summary_max_tokens?: number; // Optional max output tokens for AI summaries
   transcript_languages?: string[]; // Languages to try for transcript extraction (order matters)
   // Whisper settings
   whisper_enabled?: boolean; // Enable Whisper as fallback transcription

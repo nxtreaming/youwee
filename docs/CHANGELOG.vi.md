@@ -7,6 +7,19 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Thêm mới
+- **AI Summary trong extension** - Thêm nút Tóm tắt trong browser extension để mở video YouTube trực tiếp ở màn AI Summary
+- **Giới hạn token cho AI Summary** - Thêm ô tùy chọn trong Cài đặt để chỉnh số token đầu ra tối đa khi tạo bản tóm tắt
+
+### Thay đổi
+- **Giao diện extension** - Làm mới popup và menu nút nổi của browser extension theo phong cách gọn, hiện đại và đồng bộ hơn với trình phát nhạc
+
+### Sửa lỗi
+- **Nút nổi trong extension** - Sửa lỗi nút nổi của browser extension không hiện hoặc bị crash trên các tab đã mở sẵn trước khi extension được cài hoặc reload
+- **Tải từ extension khi app chưa mở** - Sửa lỗi bấm `Download now` trong browser extension chỉ mở Youwee nhưng không thêm video khi app desktop chưa chạy sẵn
+- **Thông tin video cho AI Summary** - Sửa lỗi AI Summary bị kẹt khi lấy thông tin video trong trường hợp phụ đề có sẵn nhưng yt-dlp không chọn được định dạng video
+- **Độ dài AI Summary** - Bỏ giới hạn token đầu ra mặc định bị hard-code để provider dùng mặc định của model, trừ khi người dùng tự đặt giá trị
+
 ## [0.17.2] - 2026-06-17
 
 ### Thay đổi
