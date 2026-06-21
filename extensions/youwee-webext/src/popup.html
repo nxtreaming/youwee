@@ -13,7 +13,7 @@
       }
 
       body {
-        width: 366px;
+        width: 380px;
         font-family:
           "Segoe UI",
           Roboto,
@@ -25,8 +25,17 @@
       }
 
       .popup {
-        padding: 14px;
-        background: radial-gradient(circle at top right, #1f2a44 0%, #0f172a 62%, #0b1220 100%);
+        position: relative;
+        overflow: hidden;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background:
+          radial-gradient(circle at 18% -10%, rgba(244, 63, 94, 0.22), transparent 34%),
+          radial-gradient(circle at 92% 8%, rgba(14, 165, 233, 0.14), transparent 30%),
+          linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.98));
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.08),
+          0 24px 60px rgba(0, 0, 0, 0.42);
       }
 
       .head {
@@ -34,7 +43,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
       }
 
       .brand {
@@ -45,15 +54,20 @@
       }
 
       .brand-logo {
-        width: 22px;
-        height: 22px;
+        width: 30px;
+        height: 30px;
         object-fit: contain;
         display: block;
+        border-radius: 999px;
+        background: rgba(248, 250, 252, 0.08);
+        box-shadow:
+          0 10px 24px rgba(0, 0, 0, 0.22),
+          0 0 0 1px rgba(255, 255, 255, 0.1);
       }
 
       .title {
         margin: 0;
-        font-size: 14px;
+        font-size: 14.5px;
         font-weight: 700;
         color: #f8fafc;
         line-height: 1.2;
@@ -66,9 +80,9 @@
         display: inline-flex;
         align-items: center;
         border-radius: 999px;
-        border: 1px solid rgba(248, 113, 113, 0.4);
-        background: rgba(239, 68, 68, 0.14);
-        color: #fecaca;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(248, 250, 252, 0.08);
+        color: #cbd5e1;
         text-decoration: none;
         font-size: 11px;
         font-weight: 700;
@@ -77,15 +91,18 @@
       }
 
       .version:hover {
-        background: rgba(239, 68, 68, 0.22);
+        color: #f8fafc;
+        background: rgba(248, 250, 252, 0.12);
       }
 
       .url-box {
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        border-radius: 10px;
-        padding: 8px 10px;
-        background: rgba(15, 23, 42, 0.64);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 18px;
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.52);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
         margin-bottom: 10px;
+        backdrop-filter: blur(18px);
       }
 
       .url-head {
@@ -99,14 +116,15 @@
       .url-label {
         font-size: 11px;
         color: #94a3b8;
+        font-weight: 700;
       }
 
       .url-copy {
-        width: 24px;
-        height: 24px;
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        border-radius: 7px;
-        background: rgba(15, 23, 42, 0.78);
+        width: 26px;
+        height: 26px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        background: rgba(248, 250, 252, 0.06);
         color: #cbd5e1;
         display: inline-flex;
         align-items: center;
@@ -116,6 +134,7 @@
 
       .url-copy:hover {
         color: #f8fafc;
+        background: rgba(248, 250, 252, 0.11);
       }
 
       .url-copy:disabled {
@@ -133,12 +152,19 @@
         font-weight: 600;
         word-break: break-all;
         color: #e2e8f0;
+        line-height: 1.45;
       }
 
       .controls {
         display: grid;
-        gap: 7px;
+        gap: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        padding: 10px;
+        background: rgba(15, 23, 42, 0.42);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
         margin-bottom: 10px;
+        backdrop-filter: blur(18px);
       }
 
       .switch-row {
@@ -146,10 +172,10 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
         padding: 8px 10px;
-        background: rgba(15, 23, 42, 0.55);
+        background: rgba(248, 250, 252, 0.05);
       }
 
       .switch-copy {
@@ -172,12 +198,14 @@
       .floating-toggle {
         width: 38px;
         height: 22px;
-        border: 1px solid rgba(148, 163, 184, 0.38);
+        border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 999px;
-        background: rgba(51, 65, 85, 0.65);
+        background: rgba(2, 6, 23, 0.56);
         padding: 2px;
         cursor: pointer;
-        transition: background 0.15s ease;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease;
       }
 
       .floating-toggle::after {
@@ -187,11 +215,13 @@
         height: 16px;
         border-radius: 999px;
         background: #e2e8f0;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
         transition: transform 0.15s ease;
       }
 
       .floating-toggle[data-enabled='true'] {
-        background: rgba(16, 185, 129, 0.45);
+        border-color: rgba(16, 185, 129, 0.36);
+        background: rgba(16, 185, 129, 0.3);
       }
 
       .floating-toggle[data-enabled='true']::after {
@@ -201,14 +231,15 @@
       .field-label {
         font-size: 11px;
         color: #94a3b8;
+        font-weight: 700;
       }
 
       .media-toggle {
         display: inline-flex;
         width: 100%;
-        border-radius: 9px;
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        background: rgba(15, 23, 42, 0.75);
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(2, 6, 23, 0.56);
         padding: 2px;
         gap: 2px;
       }
@@ -217,7 +248,7 @@
         flex: 1;
         height: 29px;
         border: 0;
-        border-radius: 7px;
+        border-radius: 999px;
         background: transparent;
         color: #94a3b8;
         font-size: 12px;
@@ -226,16 +257,17 @@
       }
 
       .media-toggle-btn[data-active="true"] {
-        background: rgba(248, 250, 252, 0.12);
+        background: rgba(248, 250, 252, 0.13);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
         color: #f8fafc;
       }
 
       .field-select {
         width: 100%;
         height: 36px;
-        border-radius: 9px;
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        background: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.64));
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(2, 6, 23, 0.52);
         color: #f8fafc;
         font-size: 12px;
         font-weight: 600;
@@ -249,12 +281,12 @@
       }
 
       .field-select:hover {
-        border-color: rgba(148, 163, 184, 0.44);
+        border-color: rgba(255, 255, 255, 0.16);
       }
 
       .field-select:focus {
-        border-color: rgba(248, 113, 113, 0.6);
-        box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.14);
+        border-color: rgba(244, 63, 94, 0.55);
+        box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.14);
       }
 
       .field-select:disabled {
@@ -288,12 +320,22 @@
         align-items: center;
         justify-content: center;
         gap: 7px;
-        border-radius: 10px;
+        min-height: 39px;
+        border-radius: 999px;
         border: 1px solid transparent;
-        padding: 9px 10px;
+        padding: 9px 12px;
         font-size: 12px;
         font-weight: 700;
         cursor: pointer;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease,
+          box-shadow 0.15s ease,
+          color 0.15s ease;
+      }
+
+      .actions button:hover:not(:disabled) {
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
       }
 
       .actions button:disabled {
@@ -316,25 +358,38 @@
 
       .primary {
         grid-column: 1 / -1;
-        background: linear-gradient(135deg, #ef4444, #f97316);
+        background: linear-gradient(135deg, #f43f5e, #f97316);
         color: #fff;
+        box-shadow: 0 14px 30px rgba(244, 63, 94, 0.22);
+      }
+
+      .primary:hover:not(:disabled) {
+        background: linear-gradient(135deg, #fb7185, #fb923c);
       }
 
       .secondary {
-        background: rgba(148, 163, 184, 0.12);
-        border-color: rgba(148, 163, 184, 0.32);
+        background: rgba(248, 250, 252, 0.07);
+        border-color: rgba(255, 255, 255, 0.1);
         color: #f8fafc;
       }
 
+      .secondary:hover:not(:disabled) {
+        background: rgba(248, 250, 252, 0.11);
+      }
+
       .summary {
-        background: rgba(168, 85, 247, 0.14);
-        border-color: rgba(168, 85, 247, 0.38);
+        background: rgba(168, 85, 247, 0.12);
+        border-color: rgba(168, 85, 247, 0.32);
         color: #e9d5ff;
+      }
+
+      .summary:hover:not(:disabled) {
+        background: rgba(168, 85, 247, 0.18);
       }
 
       .status {
         margin-top: 10px;
-        border-radius: 8px;
+        border-radius: 14px;
         padding: 7px 9px;
         font-size: 11px;
         font-weight: 600;
@@ -359,7 +414,7 @@
 
       .footer {
         margin-top: 10px;
-        border-top: 1px dashed rgba(148, 163, 184, 0.3);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
         padding-top: 8px;
         display: flex;
         justify-content: center;
