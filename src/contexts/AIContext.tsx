@@ -75,6 +75,7 @@ const defaultConfig: AIConfig = {
   summary_style: 'concise',
   summary_language: 'auto',
   timeout_seconds: 120,
+  summary_max_tokens: undefined,
   transcript_languages: ['en'],
   whisper_enabled: false,
   whisper_api_key: undefined,

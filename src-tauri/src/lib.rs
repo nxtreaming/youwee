@@ -326,6 +326,7 @@ pub fn run() {
             commands::download_gallery,
             commands::stop_gallery_download,
             // Video info commands
+            commands::get_video_basic_info,
             commands::get_video_info,
             commands::get_playlist_entries,
             commands::search_youtube_videos,

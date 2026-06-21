@@ -21,6 +21,7 @@ pub async fn generate_summary(
                 &config.summary_language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -34,6 +35,7 @@ pub async fn generate_summary(
                 &config.summary_language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -47,6 +49,7 @@ pub async fn generate_summary(
                 &config.summary_language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -60,6 +63,7 @@ pub async fn generate_summary(
                 &config.summary_language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -76,6 +80,7 @@ pub async fn generate_summary(
                 &config.summary_language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -92,6 +97,7 @@ pub async fn generate_summary(
                 &config.summary_language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -110,6 +116,7 @@ pub async fn generate_summary(
                 &config.summary_language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -138,6 +145,7 @@ pub async fn generate_summary_custom(
                 language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -151,6 +159,7 @@ pub async fn generate_summary_custom(
                 language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -164,6 +173,7 @@ pub async fn generate_summary_custom(
                 language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -177,6 +187,7 @@ pub async fn generate_summary_custom(
                 language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -193,6 +204,7 @@ pub async fn generate_summary_custom(
                 language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -209,6 +221,7 @@ pub async fn generate_summary_custom(
                 language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }
@@ -227,6 +240,7 @@ pub async fn generate_summary_custom(
                 language,
                 title,
                 config.timeout_seconds,
+                config.summary_max_tokens,
             )
             .await
         }

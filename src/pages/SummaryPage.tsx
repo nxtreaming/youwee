@@ -131,7 +131,7 @@ export function SummaryPage({ onNavigateToSettings }: SummaryPageProps) {
           thumbnail?: string;
           duration?: number;
         };
-      }>('get_video_info', {
+      }>('get_video_basic_info', {
         url: url.trim(),
         cookieMode: cookieSettings.mode,
         cookieBrowser: cookieSettings.browser || null,
