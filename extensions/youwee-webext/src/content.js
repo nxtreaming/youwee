@@ -26,6 +26,15 @@
   let collapsedState = false;
   let mediaMode = 'video';
 
+  const ACTION_ICONS = {
+    download:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>',
+    queue:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h10"></path><path d="M4 12h10"></path><path d="M4 17h7"></path><path d="M18 10v8"></path><path d="M14 14h8"></path></svg>',
+    summary:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z"></path><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"></path></svg>',
+  };
+
   function isTrustedUserEvent(event) {
     return !!event?.isTrusted;
   }
@@ -384,10 +393,10 @@
       <select id="youwee-quality-select" class="youwee-floating__select"></select>
       <div class="youwee-floating__actions">
         <button type="button" class="youwee-floating__action youwee-floating__action--primary" data-action="download_now">
-          ${ext.t('floatingButtonDownloadNow', 'Download now')}
+          ${ACTION_ICONS.download}<span>${ext.t('floatingButtonDownloadNow', 'Download now')}</span>
         </button>
         <button type="button" class="youwee-floating__action youwee-floating__action--secondary" data-action="queue_only">
-          ${ext.t('floatingButtonAddQueue', 'Add to queue')}
+          ${ACTION_ICONS.queue}<span>${ext.t('floatingButtonAddQueue', 'Add to queue')}</span>
         </button>
         <button
           type="button"
@@ -396,7 +405,7 @@
           ${canSummarize ? '' : 'disabled'}
           title="${canSummarize ? '' : ext.t('floatingSummaryUnavailable', 'Summary is available for YouTube videos')}"
         >
-          ${ext.t('floatingButtonSummary', 'AI Summary')}
+          ${ACTION_ICONS.summary}<span>${ext.t('floatingButtonSummary', 'AI Summary')}</span>
         </button>
       </div>
       <div class="youwee-floating__feedback" aria-live="polite"></div>
@@ -528,6 +537,20 @@
   if (api?.runtime?.onMessage) {
     api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (sender?.id && sender.id !== api.runtime.id) return false;
+
+      if (message?.type === 'youwee:floating-status') {
+        if (isEnabled()) {
+          ensureWidget();
+        }
+        sendResponse?.({
+          ok: true,
+          allowlisted: ext.isAllowlistedUrl(location.href),
+          enabled: isEnabled(),
+          visible: !!root?.isConnected,
+        });
+        return false;
+      }
+
       if (message?.type !== 'youwee:open-deep-link') return false;
 
       if (message.action === 'summary') {

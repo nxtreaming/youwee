@@ -287,6 +287,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        gap: 7px;
         border-radius: 10px;
         border: 1px solid transparent;
         padding: 9px 10px;
@@ -300,7 +301,21 @@
         cursor: not-allowed;
       }
 
+      .actions button svg {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+      }
+
+      .actions button span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       .primary {
+        grid-column: 1 / -1;
         background: linear-gradient(135deg, #ef4444, #f97316);
         color: #fff;
       }
@@ -312,7 +327,6 @@
       }
 
       .summary {
-        grid-column: 1 / -1;
         background: rgba(168, 85, 247, 0.14);
         border-color: rgba(168, 85, 247, 0.38);
         color: #e9d5ff;

@@ -193,11 +193,16 @@
 
 .youwee-floating__actions {
   display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 12px;
 }
 
 .youwee-floating__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   height: 36px;
   border-radius: 10px;
   border: 1px solid transparent;
@@ -207,7 +212,21 @@
   cursor: pointer;
 }
 
+.youwee-floating__action svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.youwee-floating__action span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .youwee-floating__action--primary {
+  grid-column: 1 / -1;
   background: linear-gradient(135deg, #ef4444, #f97316);
 }
 
